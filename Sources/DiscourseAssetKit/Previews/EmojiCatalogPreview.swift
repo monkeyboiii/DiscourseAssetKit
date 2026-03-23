@@ -9,7 +9,7 @@ private struct EmojiCatalogPreview: View {
     @State private var searchText = ""
 
     private var filtered: [DiscourseEmoji] {
-        if searchText.isEmpty { return Array(DiscourseEmoji.allCases.prefix(200)) }
+        if searchText.isEmpty { return Array(DiscourseEmoji.allCases) }
         return DiscourseEmoji.allCases.filter {
             $0.rawValue.localizedCaseInsensitiveContains(searchText)
         }
@@ -33,7 +33,7 @@ private struct EmojiCatalogPreview: View {
                 .padding()
             }
             .searchable(text: $searchText, prompt: "Filter by asset name")
-            .navigationTitle("Emoji Catalog (\(DiscourseEmoji.allCases.count))")
+            .navigationTitle("Emoji Catalog (\(filtered.count)/\(DiscourseEmoji.allCases.count))")
         }
     }
 }

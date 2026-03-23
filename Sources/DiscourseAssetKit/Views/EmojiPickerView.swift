@@ -25,12 +25,9 @@ public struct EmojiPickerView: View {
     @State private var showTonePicker = false
 
     @State private var scrollProxy: ScrollViewProxy?
+    @State private var viewMaxY: CGFloat = 0
 
     private let scrollCoordinateSpace = "emoji-picker-scroll"
-    private let minCellSize: CGFloat = 44
-    private let emojiSize: CGFloat = 28
-    private let railButtonSize: CGFloat = 34
-    private let railIconSize: CGFloat = 18
 
     public init(selection: Binding<String?>, store: EmojiPickerStore) {
         self._selection = selection
@@ -39,22 +36,22 @@ public struct EmojiPickerView: View {
 
     public var body: some View {
         ZStack {
-            VStack(spacing: 12) {
+            VStack(spacing: DesignTokens.Spacing.lg) {
                 topBar
 
-                HStack(spacing: 12) {
+                HStack(spacing: DesignTokens.Spacing.lg) {
                     categoryRail
                     Divider()
                     contentArea
                 }
             }
-            .padding(12)
+            .padding(DesignTokens.Spacing.lg)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: DesignTokens.CornerRadius.lg, style: .continuous)
                     .fill(.ultraThinMaterial)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: DesignTokens.CornerRadius.lg, style: .continuous)
                     .strokeBorder(.separator.opacity(0.35), lineWidth: 0.5)
             )
 
@@ -74,10 +71,19 @@ public struct EmojiPickerView: View {
                 lastNonSearchCategoryId = activeCategoryId
             }
         }
+        .background(
+            GeometryReader { proxy in
+                Color.clear.onAppear {
+                    viewMaxY = proxy.frame(in: .global).maxY
+                }
+                .onChange(of: proxy.frame(in: .global).maxY) { _, newValue in
+                    viewMaxY = newValue
+                }
+            }
+        )
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
             guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
-            let screenMaxY = UIScreen.main.bounds.maxY
-            let overlap = max(0, screenMaxY - frame.minY)
+            let overlap = max(0, viewMaxY - frame.minY)
             keyboardHeight = overlap
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
@@ -88,7 +94,7 @@ public struct EmojiPickerView: View {
     }
 
     private var topBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: DesignTokens.Spacing.lg) {
             searchPill
                 .frame(maxWidth: .infinity)
             topRightIndicator
@@ -96,7 +102,7 @@ public struct EmojiPickerView: View {
     }
 
     private var searchPill: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: DesignTokens.Spacing.md) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
 
@@ -116,8 +122,8 @@ public struct EmojiPickerView: View {
                 .accessibilityLabel(Text("Clear search"))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, DesignTokens.Spacing.lg)
+        .padding(.vertical, DesignTokens.Spacing.md)
         .background(.ultraThinMaterial, in: Capsule())
         .overlay(
             Capsule().strokeBorder(.separator.opacity(0.35), lineWidth: 0.5)
@@ -135,7 +141,7 @@ public struct EmojiPickerView: View {
                     .font(.system(size: 16))
                     .foregroundColor(selectedTone == .default ? .secondary : .white)
             }
-            .frame(width: 32, height: 32)
+            .frame(width: DesignTokens.Picker.toneIndicatorSize, height: DesignTokens.Picker.toneIndicatorSize)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text("Skin tone options"))
@@ -146,7 +152,7 @@ public struct EmojiPickerView: View {
     }
 
     private var tonePickerContent: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: DesignTokens.Spacing.sm) {
             ForEach(EmojiSkinTone.allCases) { tone in
                 Button {
                     selectedTone = tone
@@ -156,7 +162,7 @@ public struct EmojiPickerView: View {
                     ZStack {
                         Circle()
                             .fill(tone.swatchColor)
-                            .frame(width: 30, height: 30)
+                            .frame(width: DesignTokens.Picker.toneSwatchSize, height: DesignTokens.Picker.toneSwatchSize)
 
                         if tone == selectedTone {
                             Image(systemName: "checkmark")
@@ -169,7 +175,7 @@ public struct EmojiPickerView: View {
                 .accessibilityLabel(Text(toneAccessibilityLabel(tone)))
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, DesignTokens.Spacing.lg)
         .padding(.vertical, 10)
     }
 
@@ -186,7 +192,7 @@ public struct EmojiPickerView: View {
 
     private var categoryRail: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 8) {
+            VStack(spacing: DesignTokens.Spacing.md) {
                 ForEach(categories, id: \.id) { group in
                     Button {
                         activeCategoryId = group.id
@@ -199,31 +205,31 @@ public struct EmojiPickerView: View {
                         ZStack {
                             Circle()
                                 .fill(isCategoryActive(group.id) ? Color.accentColor : Color(.systemGray5))
-                            DiscourseEmojiView(emoji: group.discourseIcon, size: railIconSize)
+                            DiscourseEmojiView(emoji: group.discourseIcon, size: DesignTokens.Picker.railIconSize)
                         }
-                        .frame(width: railButtonSize, height: railButtonSize)
+                        .frame(width: DesignTokens.Picker.railButtonSize, height: DesignTokens.Picker.railButtonSize)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(Text(group.displayName))
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, DesignTokens.Spacing.xs)
         }
-        .frame(width: railButtonSize)
+        .frame(width: DesignTokens.Picker.railButtonSize)
     }
 
     private var contentArea: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: true) {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: DesignTokens.Spacing.xl) {
                     if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         groupedContent
                     } else {
                         resultsContent
                     }
                 }
-                .padding(.trailing, 8)
-                .padding(.bottom, 8)
+                .padding(.trailing, DesignTokens.Spacing.md)
+                .padding(.bottom, DesignTokens.Spacing.md)
             }
             .coordinateSpace(name: scrollCoordinateSpace)
             .onPreferenceChange(SectionHeaderPreferenceKey.self) { values in
@@ -238,7 +244,7 @@ public struct EmojiPickerView: View {
     }
 
     private var groupedContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.xl) {
             if !recentIds.isEmpty {
                 recentsSection
             }
@@ -253,7 +259,7 @@ public struct EmojiPickerView: View {
     }
 
     private var recentsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.lg) {
             sectionHeader(
                 title: EmojiGroup.recents.displayName,
                 id: EmojiGroup.recents.id,
@@ -264,7 +270,7 @@ public struct EmojiPickerView: View {
                 Text("No recent emojis yet.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, DesignTokens.Spacing.xs)
             } else {
                 emojiGrid(items: recentsItems)
             }
@@ -273,7 +279,7 @@ public struct EmojiPickerView: View {
 
     private var resultsContent: some View {
         let results = store.search(searchText)
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: DesignTokens.Spacing.lg) {
             Text("Results")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
@@ -283,7 +289,7 @@ public struct EmojiPickerView: View {
                 Text("No results")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, DesignTokens.Spacing.xs)
             } else {
                 emojiGrid(items: results)
             }
@@ -291,7 +297,7 @@ public struct EmojiPickerView: View {
     }
 
     private func sectionHeader(title: String, id: String, showsClear: Bool) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: DesignTokens.Spacing.md) {
             Text(title)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
@@ -323,8 +329,8 @@ public struct EmojiPickerView: View {
     }
 
     private func emojiGrid(items: [EmojiItem]) -> some View {
-        let columns = [GridItem(.adaptive(minimum: minCellSize), spacing: 8)]
-        return LazyVGrid(columns: columns, spacing: 8) {
+        let columns = [GridItem(.adaptive(minimum: DesignTokens.Picker.minCellSize), spacing: DesignTokens.Spacing.md)]
+        return LazyVGrid(columns: columns, spacing: DesignTokens.Spacing.md) {
             ForEach(items) { item in
                 Button {
                     var name = item.baseName
@@ -336,8 +342,8 @@ public struct EmojiPickerView: View {
                     reloadRecents()
                     dismiss()
                 } label: {
-                    emojiCellImage(item: item, size: emojiSize)
-                        .frame(width: minCellSize, height: minCellSize)
+                    emojiCellImage(item: item, size: DesignTokens.Picker.emojiSize)
+                        .frame(width: DesignTokens.Picker.minCellSize, height: DesignTokens.Picker.minCellSize)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(EmojiCellButtonStyle())
@@ -375,16 +381,16 @@ public struct EmojiPickerView: View {
     private func previewOverlay(_ item: EmojiItem) -> some View {
         ZStack {
             Color.black.opacity(0.2)
-            VStack(spacing: 8) {
-                emojiCellImage(item: item, size: 64)
+            VStack(spacing: DesignTokens.Spacing.md) {
+                emojiCellImage(item: item, size: DesignTokens.Picker.previewEmojiSize)
                 Text(prettyName(item.baseName))
                     .font(.headline)
                     .foregroundStyle(.primary)
             }
-            .padding(16)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .padding(DesignTokens.Spacing.xl)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: DesignTokens.CornerRadius.md, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: DesignTokens.CornerRadius.md, style: .continuous)
                     .strokeBorder(.separator.opacity(0.35), lineWidth: 0.5)
             )
         }
@@ -455,7 +461,7 @@ private struct EmojiCellButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: DesignTokens.CornerRadius.sm, style: .continuous)
                     .fill(configuration.isPressed ? Color(.systemGray4) : .clear)
             )
             .animation(.easeInOut(duration: 0.12), value: configuration.isPressed)

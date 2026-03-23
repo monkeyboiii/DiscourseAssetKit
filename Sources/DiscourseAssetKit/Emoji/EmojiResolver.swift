@@ -21,7 +21,7 @@ public enum EmojiResolver {
     public static func resolve(_ shortcode: String) -> DiscourseEmoji? {
         let canonical = canonicalize(shortcode)
         let assetName = DiscourseEmoji.sanitizeShortcodeToAssetName(":\(canonical):")
-        return DiscourseEmoji(rawValue: assetName)
+        return DiscourseEmoji.fromRawValue(assetName)
     }
 
     // MARK: - Unicode Replacement
@@ -47,18 +47,7 @@ public enum EmojiResolver {
     /// Resolve a Unicode emoji character, returning both asset and tone info.
     public static func resolveUnicodeWithTone(_ char: String) -> ResolvedEmoji? {
         guard let shortcode = shortcodeForUnicode(char) else { return nil }
-        // Parse tone suffix: "+1:t2" -> base="+1", tone=.light
-        let parts = shortcode.split(separator: ":", maxSplits: 2)
-        let baseName = String(parts[0])
-        let tone: EmojiSkinTone
-        if parts.count >= 2, let toneStr = parts.last, toneStr.hasPrefix("t"),
-           let toneNum = Int(toneStr.dropFirst()),
-           let parsed = EmojiSkinTone(rawValue: toneNum) {
-            tone = parsed
-        } else {
-            tone = .default
-        }
-
+        let (baseName, tone) = parseToneSuffix(shortcode)
         let canonical = canonicalize(baseName)
         guard let emoji = resolve(baseName) else { return nil }
         let isTonable = EmojiToneTable.tonableEmojis.contains(canonical)
@@ -78,29 +67,11 @@ public enum EmojiResolver {
     /// and resolve to a DiscourseEmoji + tone.
     public static func resolveWithTone(_ shortcode: String) -> ResolvedEmoji? {
         let stripped = shortcode.trimmingCharacters(in: CharacterSet(charactersIn: ":"))
-
-        // Check for tone suffix: "name:tN" where N is 2–6
-        let baseName: String
-        let tone: EmojiSkinTone
-        if let colonIdx = stripped.lastIndex(of: ":"),
-           stripped[stripped.index(after: colonIdx)...].hasPrefix("t") {
-            let suffix = stripped[stripped.index(after: colonIdx)...]  // "tN"
-            if let toneNum = Int(suffix.dropFirst()),
-               let parsed = EmojiSkinTone(rawValue: toneNum) {
-                baseName = String(stripped[..<colonIdx])
-                tone = parsed
-            } else {
-                baseName = stripped
-                tone = .default
-            }
-        } else {
-            baseName = stripped
-            tone = .default
-        }
+        let (baseName, tone) = parseToneSuffix(stripped)
 
         let canonical = canonicalize(baseName)
         let assetName = DiscourseEmoji.sanitizeShortcodeToAssetName(":\(canonical):")
-        guard let emoji = DiscourseEmoji(rawValue: assetName) else { return nil }
+        guard let emoji = DiscourseEmoji.fromRawValue(assetName) else { return nil }
 
         let isTonable = EmojiToneTable.tonableEmojis.contains(canonical)
         return ResolvedEmoji(emoji: emoji, tone: isTonable ? tone : .default, isTonable: isTonable)
@@ -124,5 +95,23 @@ public enum EmojiResolver {
     public static func isTonable(_ shortcode: String) -> Bool {
         let canonical = canonicalize(shortcode)
         return EmojiToneTable.tonableEmojis.contains(canonical)
+    }
+
+    // MARK: - Private
+
+    /// Parse tone suffix from a shortcode string.
+    /// e.g. "+1:t2" -> (baseName: "+1", tone: .light)
+    ///      "wave"  -> (baseName: "wave", tone: .default)
+    private static func parseToneSuffix(_ shortcode: String) -> (baseName: String, tone: EmojiSkinTone) {
+        guard let colonIdx = shortcode.lastIndex(of: ":") else {
+            return (shortcode, .default)
+        }
+        let suffix = shortcode[shortcode.index(after: colonIdx)...]
+        guard suffix.hasPrefix("t"),
+              let toneNum = Int(suffix.dropFirst()),
+              let parsed = EmojiSkinTone(rawValue: toneNum) else {
+            return (shortcode, .default)
+        }
+        return (String(shortcode[..<colonIdx]), parsed)
     }
 }

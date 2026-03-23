@@ -1907,6 +1907,16 @@ public enum DiscourseEmoji: String, CaseIterable, Sendable {
 extension DiscourseEmoji {
     public var image: Image { Image(self.rawValue, bundle: .module) }
 
+    /// O(1) raw-value lookup (vs the default O(n) linear scan over 1,904 cases).
+    private static let rawValueLookup: [String: DiscourseEmoji] = {
+        Dictionary(uniqueKeysWithValues: allCases.map { ($0.rawValue, $0) })
+    }()
+
+    /// Fast O(1) lookup by raw value. Prefer this over `init(rawValue:)`.
+    public static func fromRawValue(_ rawValue: String) -> DiscourseEmoji? {
+        rawValueLookup[rawValue]
+    }
+
     public static func sanitizeShortcodeToAssetName(_ shortcodeWithColons: String) -> String {
         let colonSet = CharacterSet(charactersIn: ":")
         var shortcode = shortcodeWithColons.trimmingCharacters(in: colonSet)
@@ -1940,6 +1950,7 @@ extension DiscourseEmoji {
 
     public init?(shortcodeWithColons: String) {
         let canonical = EmojiResolver.canonicalize(shortcodeWithColons)
-        self.init(rawValue: Self.sanitizeShortcodeToAssetName(canonical))
+        guard let match = Self.fromRawValue(Self.sanitizeShortcodeToAssetName(canonical)) else { return nil }
+        self = match
     }
 }

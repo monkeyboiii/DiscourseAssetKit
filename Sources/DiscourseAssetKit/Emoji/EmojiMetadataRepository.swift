@@ -4,6 +4,9 @@
 //
 
 import Foundation
+import os.log
+
+private let repoLog = Logger(subsystem: "DiscourseAssetKit", category: "EmojiMetadataRepository")
 
 public struct EmojiRefreshResult: Equatable, Sendable {
     public enum Kind: Sendable { case notModified, updated, failed }
@@ -128,17 +131,26 @@ public final class EmojiMetadataRepository: Sendable {
     private func cacheFileURL() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let dir = base.appendingPathComponent("EmojiCache", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        } catch {
+            repoLog.warning("Failed to create emoji cache directory: \(error.localizedDescription)")
+        }
         return dir.appendingPathComponent(config.cacheFileName, isDirectory: false)
+    }
+
+    /// Remove the on-disk cache file. Called when cache appears corrupted.
+    public func deleteCacheFile() {
+        let url = cacheFileURL()
+        try? FileManager.default.removeItem(at: url)
     }
 
     private func atomicWrite(data: Data, to url: URL) throws {
         let tmp = url.deletingLastPathComponent()
             .appendingPathComponent(url.lastPathComponent + ".tmp")
-
         try data.write(to: tmp, options: [.atomic])
-        try? FileManager.default.removeItem(at: url)
-        try FileManager.default.moveItem(at: tmp, to: url)
+        // Use replaceItemAt for safe atomic swap (handles existing file)
+        _ = try FileManager.default.replaceItemAt(url, withItemAt: tmp)
     }
 }
 

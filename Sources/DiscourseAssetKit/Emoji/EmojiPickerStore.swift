@@ -5,6 +5,9 @@
 
 import SwiftUI
 import Observation
+import os.log
+
+private let pickerLog = Logger(subsystem: "DiscourseAssetKit", category: "EmojiPickerStore")
 
 @MainActor
 @Observable
@@ -28,10 +31,20 @@ public final class EmojiPickerStore {
             let decoded = try repo.decode(data)
             rebuild(from: decoded)
         } catch {
-            groups = []
-            itemsByGroup = [:]
-            allItems = []
-            itemsById = [:]
+            pickerLog.error("Failed to load cached emoji data: \(error.localizedDescription). Falling back to bundle.")
+            // Cache may be corrupted — delete it and retry with bundled data
+            repo.deleteCacheFile()
+            do {
+                let data = try repo.loadBestAvailableData()
+                let decoded = try repo.decode(data)
+                rebuild(from: decoded)
+            } catch {
+                pickerLog.fault("Failed to load bundled emoji data: \(error.localizedDescription). Picker will be empty.")
+                groups = []
+                itemsByGroup = [:]
+                allItems = []
+                itemsById = [:]
+            }
         }
     }
 
@@ -90,7 +103,7 @@ public final class EmojiPickerStore {
         for (groupKey, entries) in decoded {
             for entry in entries {
                 let assetName = DiscourseEmoji.sanitizeShortcodeToAssetName(":\(entry.name):")
-                guard let emoji = DiscourseEmoji(rawValue: assetName) else { continue }
+                guard let emoji = DiscourseEmoji.fromRawValue(assetName) else { continue }
 
                 let extraAliases = EmojiAliasTable.canonicalToAliases[entry.name] ?? []
                 let allAliases = entry.searchAliases + extraAliases
