@@ -5,9 +5,7 @@
 
 import SwiftUI
 import Observation
-import os.log
-
-private let pickerLog = Logger(subsystem: "DiscourseAssetKit", category: "EmojiPickerStore")
+import OSLog
 
 @MainActor
 @Observable
@@ -16,6 +14,8 @@ public final class EmojiPickerStore {
     public var itemsByGroup: [String: [EmojiItem]] = [:]
     public var allItems: [EmojiItem] = []
     public var itemsById: [String: EmojiItem] = [:]
+
+    private let logger = Logger(subsystem: "DiscourseAssetKit", category: "EmojiPickerStore")
 
     public init() {
         loadFromTable()
@@ -32,6 +32,7 @@ public final class EmojiPickerStore {
             let base = shortcode.split(separator: ":").first.map(String.init) ?? shortcode
             let canonical = EmojiResolver.canonicalize(base)
             if let item = allItems.first(where: { $0.baseName == canonical }) {
+                logger.debug("Search: Unicode match '\(trimmed)' → \(item.baseName)")
                 return [item]
             }
         }
@@ -39,7 +40,8 @@ public final class EmojiPickerStore {
         let q = Self.normalizeQuery(rawQuery)
         guard !q.isEmpty else { return [] }
 
-        return allItems
+        // searchBlob is computed from baseName + aliases; no need to store statically.
+        let results = allItems
             .filter { $0.searchBlob.contains(q) }
             .sorted { lhs, rhs in
                 let ln = lhs.baseName == q ? 0 : 1
@@ -47,6 +49,9 @@ public final class EmojiPickerStore {
                 if ln != rn { return ln < rn }
                 return lhs.baseName < rhs.baseName
             }
+
+        logger.debug("Search: '\(rawQuery)' → \(results.count) results")
+        return results
     }
 
     // MARK: - Private
@@ -55,31 +60,31 @@ public final class EmojiPickerStore {
         var tmpItemsByGroup: [String: [EmojiItem]] = [:]
         var tmpAll: [EmojiItem] = []
 
-        for gid in EmojiItemTable.groupOrder {
-            guard let entries = EmojiItemTable.entries[gid] else { continue }
+        for tableGroup in EmojiItemTable.groups {
+            guard let entries = EmojiItemTable.entries[tableGroup.id] else { continue }
             for entry in entries {
                 guard let emoji = DiscourseEmoji.fromRawValue(entry.assetName) else { continue }
                 let item = EmojiItem(
                     id: entry.assetName,
                     emoji: emoji,
                     baseName: entry.baseName,
-                    groupId: entry.groupId,
+                    groupId: tableGroup.id,
                     tonable: entry.tonable,
                     aliases: entry.aliases,
                     searchBlob: entry.searchBlob
                 )
-                tmpItemsByGroup[gid, default: []].append(item)
+                tmpItemsByGroup[tableGroup.id, default: []].append(item)
                 tmpAll.append(item)
             }
         }
 
-        groups = EmojiItemTable.groupOrder.compactMap { gid in
-            guard tmpItemsByGroup[gid] != nil else { return nil }
+        groups = EmojiItemTable.groups.compactMap { tableGroup in
+            guard tmpItemsByGroup[tableGroup.id] != nil else { return nil }
+            guard let discourseIcon = DiscourseEmoji.fromRawValue(tableGroup.discourseIconAsset) else { return nil }
             return EmojiGroup(
-                id: gid,
-                displayName: Self.prettyGroupName(gid),
-                iconSystemName: Self.groupIconSystemName(gid),
-                discourseIcon: Self.groupDiscourseIconName(gid)
+                id: tableGroup.id,
+                displayName: tableGroup.displayName,
+                discourseIcon: discourseIcon
             )
         }
 
@@ -89,6 +94,8 @@ public final class EmojiPickerStore {
             tmpAll.map { ($0.id, $0) },
             uniquingKeysWith: { first, _ in first }
         )
+
+        logger.info("Loaded \(self.groups.count) groups, \(self.allItems.count) emojis")
     }
 
     private static func normalizeQuery(_ s: String) -> String {
@@ -96,46 +103,5 @@ public final class EmojiPickerStore {
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "_", with: " ")
             .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
-    }
-
-    private static func prettyGroupName(_ id: String) -> String {
-        id.replacingOccurrences(of: "_", with: " ")
-            .replacingOccurrences(of: "  ", with: " ")
-            .split(separator: " ")
-            .map { w in
-                if w == "&" { return "&" }
-                return w.prefix(1).uppercased() + w.dropFirst()
-            }
-            .joined(separator: " ")
-    }
-
-    private static func groupIconSystemName(_ id: String) -> String {
-        switch id {
-        case "smileys_&_emotion": return "face.smiling"
-        case "people_&_body":     return "hand.wave"
-        case "animals_&_nature":  return "pawprint"
-        case "food_&_drink":      return "takeoutbag.and.cup.and.straw"
-        case "travel_&_places":   return "globe.europe.africa"
-        case "activities":        return "gamecontroller"
-        case "objects":           return "lightbulb"
-        case "symbols":           return "at"
-        case "flags":             return "flag"
-        default:                  return "circle.grid.3x3"
-        }
-    }
-
-    private static func groupDiscourseIconName(_ id: String) -> DiscourseEmoji {
-        switch id {
-        case "smileys_&_emotion": return .emojiGrinningFace
-        case "people_&_body":     return .emojiWavingHand
-        case "animals_&_nature":  return .emojiMonkey
-        case "food_&_drink":      return .emojiGrapes
-        case "travel_&_places":   return .emojiGlobeShowingEuropeAfrica
-        case "activities":        return .emojiJackOLantern
-        case "objects":           return .emojiGlasses
-        case "symbols":           return .emojiAtmSign
-        case "flags":             return .emojiChequeredFlag
-        default:                  return .emojiRedQuestionMark
-        }
     }
 }
