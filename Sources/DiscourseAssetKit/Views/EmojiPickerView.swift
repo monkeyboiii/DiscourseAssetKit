@@ -134,14 +134,12 @@ public struct EmojiPickerView: View {
         Button {
             showTonePicker.toggle()
         } label: {
-            ZStack {
-                Circle()
-                    .fill(selectedTone == .default ? Color(.systemGray5) : selectedTone.swatchColor)
-                Image(systemName: "hand.wave")
-                    .font(.system(size: 16))
-                    .foregroundColor(selectedTone == .default ? .secondary : .white)
+            if let img = EmojiResolver.resolvedImage(for: .emojiClap, tone: selectedTone) {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: DesignTokens.Picker.toneIndicatorSize, height: DesignTokens.Picker.toneIndicatorSize)
             }
-            .frame(width: DesignTokens.Picker.toneIndicatorSize, height: DesignTokens.Picker.toneIndicatorSize)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text("Skin tone options"))
@@ -160,9 +158,12 @@ public struct EmojiPickerView: View {
                     showTonePicker = false
                 } label: {
                     ZStack {
-                        Circle()
-                            .fill(tone.swatchColor)
-                            .frame(width: DesignTokens.Picker.toneSwatchSize, height: DesignTokens.Picker.toneSwatchSize)
+                        if let img = EmojiResolver.resolvedImage(for: .emojiClap, tone: tone) {
+                            Image(uiImage: img)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: DesignTokens.Picker.toneSwatchSize, height: DesignTokens.Picker.toneSwatchSize)
+                        }
 
                         if tone == selectedTone {
                             Image(systemName: "checkmark")
@@ -205,7 +206,12 @@ public struct EmojiPickerView: View {
                         ZStack {
                             Circle()
                                 .fill(isCategoryActive(group.id) ? Color.accentColor : Color(.systemGray5))
-                            DiscourseEmojiView(emoji: group.discourseIcon, size: DesignTokens.Picker.railIconSize)
+                            if let img = EmojiResolver.resolvedImage(for: group.discourseIcon, tone: selectedTone) {
+                                Image(uiImage: img)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: DesignTokens.Picker.railIconSize, height: DesignTokens.Picker.railIconSize)
+                            }
                         }
                         .frame(width: DesignTokens.Picker.railButtonSize, height: DesignTokens.Picker.railButtonSize)
                     }
