@@ -1,0 +1,3 @@
+[submodule "discourse-assets"]
+	path = discourse-assets
+	url = git@github.com:monkeyboiii/discourse-assets.git
