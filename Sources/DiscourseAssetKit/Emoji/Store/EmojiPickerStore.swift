@@ -12,49 +12,16 @@ private let pickerLog = Logger(subsystem: "DiscourseAssetKit", category: "EmojiP
 @MainActor
 @Observable
 public final class EmojiPickerStore {
-    private let repo: EmojiMetadataRepository
-
     public var groups: [EmojiGroup] = []
     public var itemsByGroup: [String: [EmojiItem]] = [:]
     public var allItems: [EmojiItem] = []
     public var itemsById: [String: EmojiItem] = [:]
 
-    public init(repo: EmojiMetadataRepository) {
-        self.repo = repo
-        rebuildFromDiskOrBundle()
-        startListeningForUpdates()
+    public init() {
+        loadFromTable()
     }
 
-    public func rebuildFromDiskOrBundle() {
-        do {
-            let data = try repo.loadBestAvailableData()
-            let decoded = try repo.decode(data)
-            rebuild(from: decoded)
-        } catch {
-            pickerLog.error("Failed to load cached emoji data: \(error.localizedDescription). Falling back to bundle.")
-            // Cache may be corrupted — delete it and retry with bundled data
-            repo.deleteCacheFile()
-            do {
-                let data = try repo.loadBestAvailableData()
-                let decoded = try repo.decode(data)
-                rebuild(from: decoded)
-            } catch {
-                pickerLog.fault("Failed to load bundled emoji data: \(error.localizedDescription). Picker will be empty.")
-                groups = []
-                itemsByGroup = [:]
-                allItems = []
-                itemsById = [:]
-            }
-        }
-    }
-
-    /// Foreground refresh: throttled, then rebuild if updated.
-    public func refreshForegroundIfStale(minInterval: TimeInterval = 60 * 30) async {
-        let res = await repo.refreshRemoteIfStale(minInterval: minInterval)
-        if res.kind == .updated {
-            rebuildFromDiskOrBundle()
-        }
-    }
+    // MARK: - Search
 
     public func search(_ rawQuery: String) -> [EmojiItem] {
         let trimmed = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -84,63 +51,36 @@ public final class EmojiPickerStore {
 
     // MARK: - Private
 
-    private func startListeningForUpdates() {
-        NotificationCenter.default.addObserver(
-            forName: .emojiMetadataDidUpdate,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.rebuildFromDiskOrBundle()
-            }
-        }
-    }
-
-    private func rebuild(from decoded: [String: [EmojiJSONEntry]]) {
+    private func loadFromTable() {
         var tmpItemsByGroup: [String: [EmojiItem]] = [:]
         var tmpAll: [EmojiItem] = []
 
-        for (groupKey, entries) in decoded {
+        for gid in EmojiItemTable.groupOrder {
+            guard let entries = EmojiItemTable.entries[gid] else { continue }
             for entry in entries {
-                let assetName = DiscourseEmoji.sanitizeShortcodeToAssetName(":\(entry.name):")
-                guard let emoji = DiscourseEmoji.fromRawValue(assetName) else { continue }
-
-                let extraAliases = EmojiAliasTable.canonicalToAliases[entry.name] ?? []
-                let allAliases = entry.searchAliases + extraAliases
-                let blob = Self.makeSearchBlob(name: entry.name, aliases: allAliases)
+                guard let emoji = DiscourseEmoji.fromRawValue(entry.assetName) else { continue }
                 let item = EmojiItem(
-                    id: assetName,
+                    id: entry.assetName,
                     emoji: emoji,
-                    baseName: entry.name,
-                    groupId: groupKey,
+                    baseName: entry.baseName,
+                    groupId: entry.groupId,
                     tonable: entry.tonable,
-                    aliases: entry.searchAliases,
-                    url: entry.url,
-                    searchBlob: blob
+                    aliases: entry.aliases,
+                    searchBlob: entry.searchBlob
                 )
-
-                tmpItemsByGroup[groupKey, default: []].append(item)
+                tmpItemsByGroup[gid, default: []].append(item)
                 tmpAll.append(item)
             }
         }
 
-        let knownOrder = EmojiGroup.canonicalOrder
-        let knownSet = Set(knownOrder)
-        let orderedKnown = knownOrder.filter { tmpItemsByGroup.keys.contains($0) }
-        let orderedUnknown = tmpItemsByGroup.keys.filter { !knownSet.contains($0) }.sorted()
-        let groupIds = orderedKnown + orderedUnknown
-
-        groups = groupIds.map { gid in
-            EmojiGroup(
+        groups = EmojiItemTable.groupOrder.compactMap { gid in
+            guard tmpItemsByGroup[gid] != nil else { return nil }
+            return EmojiGroup(
                 id: gid,
                 displayName: Self.prettyGroupName(gid),
                 iconSystemName: Self.groupIconSystemName(gid),
                 discourseIcon: Self.groupDiscourseIconName(gid)
             )
-        }
-
-        for (gid, items) in tmpItemsByGroup {
-            tmpItemsByGroup[gid] = items.sorted { $0.baseName < $1.baseName }
         }
 
         itemsByGroup = tmpItemsByGroup
@@ -149,13 +89,6 @@ public final class EmojiPickerStore {
             tmpAll.map { ($0.id, $0) },
             uniquingKeysWith: { first, _ in first }
         )
-    }
-
-    private static func makeSearchBlob(name: String, aliases: [String]) -> String {
-        let parts = ([name] + aliases)
-            .map { $0.replacingOccurrences(of: "_", with: " ") }
-            .joined(separator: " ")
-        return normalizeQuery(parts)
     }
 
     private static func normalizeQuery(_ s: String) -> String {
@@ -204,18 +137,5 @@ public final class EmojiPickerStore {
         case "flags":             return .emojiChequeredFlag
         default:                  return .emojiRedQuestionMark
         }
-    }
-}
-
-public extension EmojiPickerStore {
-    /// Convenience factory — pass your Discourse forum base URL.
-    static func make(forumBaseURL: URL) -> EmojiPickerStore {
-        let config = EmojiMetadataRepository.Config(
-            endpoint: forumBaseURL.appendingPathComponent("emojis.json"),
-            bundledResourceName: "emojis",
-            bundledResourceExt: "json",
-            cacheFileName: "emojis.remote.json"
-        )
-        return EmojiPickerStore(repo: EmojiMetadataRepository(config: config))
     }
 }

@@ -24,6 +24,7 @@ public enum EmojiSkinTone: Int, CaseIterable, Identifiable, Sendable {
         self == .default ? "" : ":t\(rawValue)"
     }
 
+    /// Deprecated
     /// Swatch color shown in the tone picker UI
     public var swatchColor: Color {
         switch self {

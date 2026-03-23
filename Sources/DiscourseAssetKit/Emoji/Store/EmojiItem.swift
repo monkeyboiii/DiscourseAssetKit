@@ -12,19 +12,17 @@ public struct EmojiItem: Identifiable, Hashable, Sendable {
     public let groupId: String
     public let tonable: Bool
     public let aliases: [String]
-    public let url: String?
     public let searchBlob: String
 
     public var image: Image { emoji.image }
 
-    public init(id: String, emoji: DiscourseEmoji, baseName: String, groupId: String, tonable: Bool, aliases: [String], url: String?, searchBlob: String) {
+    public init(id: String, emoji: DiscourseEmoji, baseName: String, groupId: String, tonable: Bool, aliases: [String], searchBlob: String) {
         self.id = id
         self.emoji = emoji
         self.baseName = baseName
         self.groupId = groupId
         self.tonable = tonable
         self.aliases = aliases
-        self.url = url
         self.searchBlob = searchBlob
     }
 }
