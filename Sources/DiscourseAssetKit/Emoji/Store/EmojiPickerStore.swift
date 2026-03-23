@@ -57,41 +57,13 @@ public final class EmojiPickerStore {
     // MARK: - Private
 
     private func loadFromTable() {
-        var tmpItemsByGroup: [String: [EmojiItem]] = [:]
-        var tmpAll: [EmojiItem] = []
+        groups = EmojiItemTable.groups
+        itemsByGroup = EmojiItemTable.entries
 
-        for tableGroup in EmojiItemTable.groups {
-            guard let entries = EmojiItemTable.entries[tableGroup.id] else { continue }
-            for entry in entries {
-                guard let emoji = DiscourseEmoji.fromRawValue(entry.assetName) else { continue }
-                let item = EmojiItem(
-                    id: entry.assetName,
-                    emoji: emoji,
-                    baseName: entry.baseName,
-                    groupId: tableGroup.id,
-                    tonable: entry.tonable,
-                    aliases: entry.aliases,
-                    searchBlob: entry.searchBlob
-                )
-                tmpItemsByGroup[tableGroup.id, default: []].append(item)
-                tmpAll.append(item)
-            }
-        }
-
-        groups = EmojiItemTable.groups.compactMap { tableGroup in
-            guard tmpItemsByGroup[tableGroup.id] != nil else { return nil }
-            guard let discourseIcon = DiscourseEmoji.fromRawValue(tableGroup.discourseIconAsset) else { return nil }
-            return EmojiGroup(
-                id: tableGroup.id,
-                displayName: tableGroup.displayName,
-                discourseIcon: discourseIcon
-            )
-        }
-
-        itemsByGroup = tmpItemsByGroup
-        allItems = tmpAll
+        let all = EmojiItemTable.entries.values.flatMap { $0 }
+        allItems = all
         itemsById = Dictionary(
-            tmpAll.map { ($0.id, $0) },
+            all.map { ($0.id, $0) },
             uniquingKeysWith: { first, _ in first }
         )
 
