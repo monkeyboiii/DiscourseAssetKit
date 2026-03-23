@@ -349,6 +349,16 @@ public enum DiscourseIcon: String, CaseIterable, Sendable {
 extension DiscourseIcon {
     public var image: Image { Image(self.rawValue, bundle: .module) }
 
+    /// O(1) raw-value lookup (vs the default O(n) linear scan over 347 cases).
+    private static let rawValueLookup: [String: DiscourseIcon] = {
+        Dictionary(uniqueKeysWithValues: allCases.map { ($0.rawValue, $0) })
+    }()
+
+    /// Fast O(1) lookup by raw value. Prefer this over `init(rawValue:)`.
+    public static func fromRawValue(_ rawValue: String) -> DiscourseIcon? {
+        rawValueLookup[rawValue]
+    }
+
     /// Initialize DiscourseIcon from Discourse API string (e.g., "comment", "bell", "#comment")
     ///
     /// This initializer handles various string formats from the Discourse API:
@@ -373,7 +383,7 @@ extension DiscourseIcon {
             : rawString
 
         // Try direct match first (handles icons already in camelCase)
-        if let icon = DiscourseIcon(rawValue: cleaned) {
+        if let icon = DiscourseIcon.fromRawValue(cleaned) {
             self = icon
             return
         }
@@ -388,6 +398,10 @@ extension DiscourseIcon {
             .joined()
 
         // Try camelCase version
-        self.init(rawValue: camelCased)
+        if let icon = DiscourseIcon.fromRawValue(camelCased) {
+            self = icon
+        } else {
+            return nil
+        }
     }
 }
