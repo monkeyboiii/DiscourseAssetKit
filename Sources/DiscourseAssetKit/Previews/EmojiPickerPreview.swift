@@ -8,14 +8,7 @@ import SwiftUI
 private struct EmojiPickerDemoPreview: View {
     @State private var selection: String? = "grinning_face"
     @State private var isPresented = false
-    @State private var store = EmojiPickerStore(
-        repo: EmojiMetadataRepository(config: .init(
-            endpoint: URL(string: "https://example.com/emojis.json")!,
-            bundledResourceName: "emojis",
-            bundledResourceExt: "json",
-            cacheFileName: "emojis.remote.json"
-        ))
-    )
+    @State private var store = EmojiPickerStore()
 
     var body: some View {
         VStack(spacing: 16) {
@@ -51,12 +44,10 @@ private struct EmojiPickerDemoPreview: View {
             if let selection, let item = store.allItems.first(where: { $0.baseName == selection }) {
                 Text("Group: \(groupName(for: item))")
                 Text("Name: \(item.baseName)")
-                Text("URL: \(item.url ?? "-")")
                 Text("Aliases: \(item.aliases.isEmpty ? "-" : item.aliases.joined(separator: ", "))")
             } else {
                 Text("Group: -")
                 Text("Name: -")
-                Text("URL: -")
                 Text("Aliases: -")
             }
         }

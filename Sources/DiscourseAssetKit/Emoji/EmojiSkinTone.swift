@@ -23,18 +23,6 @@ public enum EmojiSkinTone: Int, CaseIterable, Identifiable, Sendable {
     public var suffix: String {
         self == .default ? "" : ":t\(rawValue)"
     }
-
-    /// Swatch color shown in the tone picker UI
-    public var swatchColor: Color {
-        switch self {
-        case .default:     return Color(red: 1.0, green: 0.8, blue: 0.25)     // emoji yellow
-        case .light:       return Color(red: 0.99, green: 0.87, blue: 0.73)    // #FDDEB5
-        case .mediumLight: return Color(red: 0.89, green: 0.73, blue: 0.55)    // #E3BA8C
-        case .medium:      return Color(red: 0.72, green: 0.54, blue: 0.36)    // #B8895C
-        case .mediumDark:  return Color(red: 0.55, green: 0.38, blue: 0.24)    // #8C613C
-        case .dark:        return Color(red: 0.38, green: 0.24, blue: 0.14)    // #603D23
-        }
-    }
 }
 
 // MARK: - Persistence
