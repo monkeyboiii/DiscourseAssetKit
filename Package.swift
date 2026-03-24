@@ -15,7 +15,8 @@ let package = Package(
         .target(
             name: "DiscourseAssetKit",
             resources: [
-                .process("Resources")
+                .copy("Resources/Emojis"),
+                .process("Resources/DiscourseIcons.xcassets"),
             ]
         ),
         .testTarget(

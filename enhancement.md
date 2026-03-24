@@ -8,12 +8,13 @@
 
 | # | Enhancement | Priority | Complexity | Risk | Benefit |
 |---|-------------|----------|------------|------|---------|
-| 1 | [Image Cache Layer](#1-image-cache-layer) | P0 | Medium (~70 lines) | Low | High |
+| 1 | ~~[Image Cache Layer](#1-image-cache-layer)~~ | ~~P0~~ | ~~Medium~~ | ~~Low~~ | ~~High~~ |
+| 1b | [Size-Aware Resize Cache](#1b-size-aware-resize-cache) | P2 | Low (~20 lines) | Low | Medium |
 | 2 | [Core Test Suite](#2-core-test-suite) | P0 | Medium (~250 lines) | Low | High |
 | 3 | [Accessibility Improvements](#3-accessibility-improvements) | P1 | Low (~20 lines) | Low | Medium |
 | 4 | [Lazy Static Table Initialization](#4-lazy-static-table-initialization) | P3 | High (~100+ lines) | Medium | Low |
 
-**Recommended order:** 2 → 1 → 3 → 4 (only if profiling warrants)
+**Recommended order:** 2 → 3 → 1b → 4 (only if profiling warrants)
 
 ---
 
@@ -25,29 +26,27 @@
 - ~~Replace Deprecated UIScreen.main~~ — uses `GeometryReader` + `NotificationCenter`
 - ~~Design System Constants~~ — `DesignTokens.swift` with spacing/radius/sizing tokens
 - ~~EmojiCatalogPreview Full Display~~ — `.prefix(200)` removed, shows all emoji
+- ~~Image Cache Layer~~ — `EmojiImageCache` with `NSCache` implemented as part of flat PNG migration (replaces `UIImage(named:in:.module)` which had system cache; `UIImage(contentsOfFile:)` does not)
 
 ---
 
 ## P0 — Critical
 
-### 1. Image Cache Layer
+### 1b. Size-Aware Resize Cache
 
-**Problem:** Three distinct uncached image loading paths:
-1. `DiscourseEmojiView` calls `UIImage(named:in:compatibleWith:)` every render (has system cache, but tone-aware loads bypass it)
-2. `EmojiPickerView.emojiCellImage()` calls `EmojiResolver.resolvedImage()` in view builder for every grid cell during scroll
-3. `EmojiText` creates a **new `UIGraphicsImageRenderer`** for every inline emoji on every render via `UIImage.resized(to:)` — the most severe issue
+**Problem:** `EmojiText` creates a **new `UIGraphicsImageRenderer`** for every inline emoji on every render via `UIImage.resized(to:)`. Base image loading is now cached by `EmojiImageCache`, but the per-size resize still allocates each time.
 
-**Solution:** Add `NSCache<NSString, UIImage>` in `EmojiResolver` keyed by `"\(assetName)_t\(tone)_\(size)"`. Wrap `resolvedImage(for:tone:)` to check cache first. Add a size-aware variant. Update `EmojiText` to use cached pre-resized images.
+**Solution:** Add a size-aware cache key (`"\(assetName)_\(width)x\(height)"`) to `EmojiImageCache` or a dedicated resize cache.
 
 **Files:**
 | File | Change |
 |------|--------|
-| `Emoji/EmojiResolver.swift` | Add `NSCache`-backed `resolvedImage(for:tone:size:)` |
-| `Views/EmojiText.swift` | Replace per-render `uiImage.resized(to:)` with cached variant |
+| `Emoji/EmojiImageCache.swift` | Add `resizedImage(named:size:)` with size-keyed cache |
+| `Views/EmojiText.swift` | Replace `uiImage.resized(to:)` with cached variant |
 
-**Complexity:** Medium (~70 lines)
-**Risk:** Low — `NSCache` auto-evicts under memory pressure; no behavioral change
-**Benefit:** High — eliminates per-render `UIGraphicsImageRenderer` allocations, smooth picker scrolling
+**Complexity:** Low (~20 lines)
+**Risk:** Low — additive
+**Benefit:** Medium — eliminates per-render `UIGraphicsImageRenderer` allocations in `EmojiText`
 
 ---
 

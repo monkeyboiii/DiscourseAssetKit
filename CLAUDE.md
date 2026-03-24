@@ -136,7 +136,7 @@ EmojiText(rawText: "Hello :wave: world 😀")
 
 // Emoji picker
 @State var selection: String?
-@State var store = EmojiPickerStore.make(forumBaseURL: URL(string: "https://forum.example.com")!)
+@State var store = EmojiPickerStore()
 
 EmojiPickerView(selection: $selection, store: store)
 ```
@@ -224,25 +224,12 @@ Bundle.main.url(forResource: ...)
 
 - `EmojiPickerStore` is `@MainActor` (UI-bound `@Observable`)
 - `EmojiRecents`, `EmojiTonePreference` static methods are `@MainActor`
-- `EmojiMetadataRepository` is `Sendable` (no shared mutable state)
-- Value types (`EmojiItem`, `EmojiGroup`, `EmojiSkinTone`, etc.) conform to `Sendable`
 - `PreferenceKey.defaultValue` uses `nonisolated(unsafe)` for Swift 6 compatibility
 
 ### Access Control
 
 - **Public:** All types, views, inits, and methods consumers need
-- **Internal (default):** Generated lookup tables (`EmojiAliasTable`, `EmojiReplacementTable`, `EmojiToneTable`) — implementation details only used by `EmojiResolver` and `EmojiPickerStore`
 - **Private:** Preview views, helper extensions
-
-### Remote Refresh
-
-`EmojiMetadataRepository` supports fetching updated emoji metadata from a Discourse server:
-
-```
-Bundled emojis.json (fallback) → Remote /emojis.json (cached to disk) → ETag/304 conditional refresh
-```
-
-Refresh is throttled (default 30 min) via `EmojiPickerStore.refreshForegroundIfStale()`.
 
 ---
 
