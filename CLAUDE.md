@@ -2,7 +2,7 @@
 
 **Discourse emoji and icon assets as a reusable Swift package for iOS.**
 
-**Last Updated:** 2026-03-23\
+**Last Updated:** 2026-03-25\
 **Swift Tools Version:** 6.2\
 **Platform:** iOS 26+
 
@@ -17,8 +17,8 @@ Extracted from the [Dirt Bike Bros](https://github.com/monkeyboiii/dirtbikebros)
 ### Key Characteristics
 
 - **Type:** Swift Package (SPM)
-- **Assets:** 3,400+ emoji imagesets, 335+ icon imagesets
-- **Code:** ~9,000 lines Swift (5,900 auto-generated lookup tables + 3,100 hand-written)
+- **Assets:** 3,400+ emoji PNGs (flat, bundled via `.copy()`), 335+ icon imagesets (xcassets)
+- **Code:** ~12,300 lines Swift (10,900 auto-generated lookup tables + 1,400 hand-written)
 - **Dependencies:** None (pure Swift + SwiftUI + UIKit)
 - **Generation Scripts:** Python scripts in `discourse-assets/` submodule
 
@@ -29,34 +29,50 @@ Extracted from the [Dirt Bike Bros](https://github.com/monkeyboiii/dirtbikebros)
 ```
 Sources/DiscourseAssetKit/
 ├── DiscourseAssetKit.swift            # Package entry / usage docs
-├── Emoji/                             # Core emoji logic (12 files)
-│   ├── DiscourseEmoji.swift           # 1,904-case enum (generated)
-│   ├── EmojiResolver.swift            # Shortcode/Unicode resolution
-│   ├── EmojiPickerStore.swift         # @MainActor @Observable state
-│   ├── EmojiMetadataRepository.swift  # JSON loading + remote refresh
-│   ├── EmojiItem.swift                # Display model
-│   ├── EmojiGroup.swift               # Category grouping
-│   ├── EmojiSkinTone.swift            # Tone enum + persistence
+├── DesignSystem/
+│   └── DesignTokens.swift             # Spacing/radius/sizing tokens
+├── Emoji/                             # Core emoji logic
+│   ├── Emoji+Init.swift               # O(1) lookup + sanitize helpers
+│   ├── EmojiImageCache.swift          # NSCache loader + .image property
 │   ├── EmojiRecents.swift             # Recent usage tracking
-│   ├── EmojiJSONEntry.swift           # JSON decoding model
-│   ├── EmojiAliasTable.swift          # Generated: alias → canonical
-│   ├── EmojiReplacementTable.swift    # Generated: Unicode → shortcode
-│   └── EmojiToneTable.swift           # Generated: tonable emoji set
-├── Icon/                              # Icon components (2 files)
-│   ├── DiscourseIcon.swift            # 347-case enum (generated)
-│   └── DiscourseIconView.swift        # SwiftUI view
-├── Views/                             # Public UI components (4 files)
+│   ├── EmojiResolver.swift            # Shortcode/Unicode resolution
+│   ├── EmojiSkinTone.swift            # Tone enum + persistence
+│   ├── Generated/                     # AUTO-GENERATED — do not edit
+│   │   ├── DiscourseEmoji.swift       # 1,904-case enum
+│   │   ├── EmojiAliasTable.swift      # alias → canonical
+│   │   ├── EmojiItemTable.swift       # Pre-computed EmojiItem/EmojiGroup data
+│   │   ├── EmojiReplacementTable.swift # Unicode → shortcode
+│   │   └── EmojiToneTable.swift       # Tonable emoji set
+│   └── Store/
+│       ├── EmojiGroup.swift           # Category grouping
+│       ├── EmojiItem.swift            # Display model
+│       └── EmojiPickerStore.swift     # @MainActor @Observable state
+├── Icon/
+│   ├── DiscourseIconView.swift        # SwiftUI view
+│   ├── Generated/
+│   │   └── DiscourseIcon.swift        # 347-case enum
+│   └── Icon+Init.swift               # O(1) lookup helper
+├── Views/
 │   ├── DiscourseEmojiView.swift       # Single emoji display
 │   ├── EmojiText.swift                # Inline emoji in text
-│   ├── EmojiPickerView.swift          # Full picker with search/tones
-│   └── EmojiPickerPreview.swift       # Picker demo preview
-├── Previews/                          # Catalog browsers (2 files)
+│   └── EmojiPickerView.swift          # Full picker with search/tones
+├── Previews/
 │   ├── EmojiCatalogPreview.swift      # Browsable emoji grid
+│   ├── EmojiPickerPreview.swift       # Picker demo preview
 │   └── IconCatalogPreview.swift       # Browsable icon grid
 └── Resources/
-    ├── DiscourseEmojis.xcassets/      # 3,400+ imagesets (base + tone)
-    ├── DiscourseIcons.xcassets/       # 335+ imagesets (template PDFs)
-    └── emojis.json                    # Bundled metadata from Discourse
+    ├── Emojis/                        # 3,400+ flat PNGs (bundled via .copy())
+    └── DiscourseIcons.xcassets/       # 335+ icon imagesets (template PDFs)
+```
+
+### Demo App
+
+```
+DakDemo/                               # Minimal demo app using EmojiPickerView
+├── DakDemo/
+│   ├── DakDemoApp.swift
+│   └── ContentView.swift              # Sheet-based emoji picker demo
+└── DakDemo.xcodeproj/                 # Local package dependency on DiscourseAssetKit
 ```
 
 ---
@@ -79,8 +95,8 @@ Sources/DiscourseAssetKit/
 | `DiscourseEmoji` | `enum` (1,904 cases) | All emoji asset names, `CaseIterable` |
 | `DiscourseIcon` | `enum` (347 cases) | All icon asset names, `CaseIterable` |
 | `EmojiResolver` | `enum` (static) | Shortcode → asset resolution pipeline |
+| `EmojiImageCache` | `enum` (static) | `NSCache`-backed flat PNG loader |
 | `EmojiPickerStore` | `@Observable class` | Picker state: groups, items, search |
-| `EmojiMetadataRepository` | `class` | JSON loading from bundle + remote refresh |
 | `EmojiItem` | `struct` | Emoji display model (name, group, aliases) |
 | `EmojiGroup` | `struct` | Category (smileys, people, animals, etc.) |
 | `EmojiSkinTone` | `enum` | Tone modifiers (default, light, medium, dark) |
@@ -102,8 +118,8 @@ EmojiResolver.resolveWithTone("+1:t3")             // → ResolvedEmoji(emoji, t
 EmojiResolver.resolveUnicode("😀")                 // → .emojiGrinningFace
 EmojiResolver.resolveUnicodeWithTone("👍🏽")         // → ResolvedEmoji(emoji, tone: .medium)
 
-// Image loading (tone-aware)
-EmojiResolver.resolvedImage(for: .emojiWavingHand, tone: .dark)  // UIImage from asset catalog
+// Image loading (tone-aware, NSCache-backed)
+EmojiResolver.resolvedImage(for: .emojiWavingHand, tone: .dark)  // UIImage from cached flat PNG
 ```
 
 ---
@@ -141,6 +157,10 @@ EmojiText(rawText: "Hello :wave: world 😀")
 EmojiPickerView(selection: $selection, store: store)
 ```
 
+### Demo app
+
+`DakDemo/` is a minimal Xcode project that demonstrates `EmojiPickerView` in a sheet. Open `DakDemo/DakDemo.xcodeproj` in Xcode — the local package dependency is already configured.
+
 ### Restoring app-specific convenience inits
 
 The package removed app-specific types. Add back in your app:
@@ -159,43 +179,46 @@ extension DiscourseEmojiView {
 
 ## Asset Generation
 
-Assets and enums are generated by Python scripts in the `discourse-assets/` submodule.
+Assets and enums are generated by Python scripts in the `discourse-assets/` submodule. The main entry point is `emoji.sh`.
 
-### Emoji generation
+### Emoji generation (default — flat PNGs)
 
 ```bash
 cd discourse-assets
-
-# 1. Fetch emoji metadata + download PNGs
-python discourse_emojis.py \
-    --json assets/emojis.json \
-    --out ../Sources/DiscourseAssetKit/Resources/DiscourseEmojis.xcassets \
-    --download \
-    --swift ../Sources/DiscourseAssetKit/Emoji/DiscourseEmoji.swift
-
-# 2. Generate lookup tables (alias, Unicode, tone)
-python generate_emoji_lookups.py \
-    --json assets/emojis.json \
-    --out ../Sources/DiscourseAssetKit/Emoji/
+bash emoji.sh
 ```
+
+This runs four steps:
+1. Download `emojis.json` + `data.js` from Discourse
+2. `discourse_emojis.py` → download PNGs to `Emojis/` + generate `DiscourseEmoji.swift` enum
+3. Copy flat PNGs to `Resources/Emojis/`
+4. `generate_emoji_lookups.py` → alias, replacement, tone tables
+5. `generate_emoji_items.py` → pre-computed `EmojiItemTable.swift`
+
+### Emoji generation (legacy — xcassets)
+
+```bash
+cd discourse-assets
+bash emoji.sh --legacy
+```
+
+Generates `DiscourseEmojis.xcassets/` with `.imageset` directories instead. The `--legacy` flag is passed through to `discourse_emojis.py --legacy`, which also generates the `.image` extension on the enum (for `Image(name, bundle: .module)` loading).
 
 ### Icon generation
 
 ```bash
 cd discourse-assets
-
-python discourse_sprite_icons.py \
-    --svg assets/sprite.svg \
-    --out ../Sources/DiscourseAssetKit/Resources/DiscourseIcons.xcassets \
-    --swift ../Sources/DiscourseAssetKit/Icon/DiscourseIcon.swift
+bash icon.sh
 ```
 
 ### What the scripts produce
 
 | Script | Output | Count |
 |--------|--------|-------|
-| `discourse_emojis.py` | `DiscourseEmojis.xcassets/` + `DiscourseEmoji.swift` | 1,904 emoji + tone variants |
-| `generate_emoji_lookups.py` | `EmojiAliasTable.swift`, `EmojiReplacementTable.swift`, `EmojiToneTable.swift` | 5,900 lines |
+| `discourse_emojis.py` | `Emojis/` flat PNGs + `DiscourseEmoji.swift` | 1,904 emoji + tone variants |
+| `discourse_emojis.py --legacy` | `DiscourseEmojis.xcassets/` + enum with `.image` | same |
+| `generate_emoji_lookups.py` | `EmojiAliasTable.swift`, `EmojiReplacementTable.swift`, `EmojiToneTable.swift` | ~5,900 lines |
+| `generate_emoji_items.py` | `EmojiItemTable.swift` | ~2,000 lines |
 | `discourse_sprite_icons.py` | `DiscourseIcons.xcassets/` + `DiscourseIcon.swift` | 347 icons |
 
 **Never hand-edit generated files.** Regenerate from scripts instead.
@@ -204,26 +227,37 @@ python discourse_sprite_icons.py \
 
 ## Architecture Patterns
 
-### Bundle.module
+### Flat PNG Loading (Emoji)
 
-All asset loading uses `Bundle.module` (SPM resource bundle), not `Bundle.main`:
+Emoji PNGs are bundled as flat files via `.copy("Resources/Emojis")` — **no `actool` compilation**. This avoids the memory explosion that xcassets caused with 3,400+ imagesets.
+
+All emoji image loading goes through `EmojiImageCache`, which uses `Bundle.module.url(forResource:withExtension:subdirectory:"Emojis")` + `NSCache`:
 
 ```swift
-// Correct (package)
-Image(self.rawValue, bundle: .module)
-UIImage(named: assetName, in: .module, compatibleWith: nil)
-Bundle.module.url(forResource: "emojis", withExtension: "json")
+// Centralized loader (EmojiImageCache.swift)
+EmojiImageCache.image(named: "emoji_wave")           // UIImage? (cached)
 
-// Wrong (would look in app bundle, not package bundle)
-Image(self.rawValue)
-UIImage(named: assetName)
-Bundle.main.url(forResource: ...)
+// Convenience property (EmojiImageCache.swift extension)
+DiscourseEmoji.emojiWave.image                        // SwiftUI Image
+
+// Tone-aware loading (EmojiResolver.swift)
+EmojiResolver.resolvedImage(for: .emojiWave, tone: .dark)  // UIImage? (cached)
+```
+
+### Bundle.module (Icons)
+
+Icon assets use `Bundle.module` via standard xcassets (335 icons — small enough for `actool`):
+
+```swift
+// Icons — still use xcassets for template rendering
+Image(self.rawValue, bundle: .module)                 // DiscourseIcon.image
 ```
 
 ### Swift 6 Concurrency
 
 - `EmojiPickerStore` is `@MainActor` (UI-bound `@Observable`)
 - `EmojiRecents`, `EmojiTonePreference` static methods are `@MainActor`
+- `EmojiImageCache` uses `nonisolated(unsafe)` for thread-safe `NSCache` static
 - `PreferenceKey.defaultValue` uses `nonisolated(unsafe)` for Swift 6 compatibility
 
 ### Access Control
@@ -238,12 +272,16 @@ Bundle.main.url(forResource: ...)
 ### Building
 
 ```bash
-# CLI build
+# Package (library only)
 cd DiscourseAssetKit
 xcodebuild -scheme DiscourseAssetKit -destination 'generic/platform=iOS' build
 
+# Demo app
+xcodebuild -project DakDemo/DakDemo.xcodeproj -scheme DakDemo -destination 'generic/platform=iOS' build
+
 # Or open in Xcode
-open Package.swift
+open Package.swift           # package
+open DakDemo/DakDemo.xcodeproj  # demo app
 ```
 
 ### Previews
@@ -254,7 +292,7 @@ Open the package in Xcode and navigate to any file with `#Preview`:
 |---------|------|-------|
 | Emoji Catalog | `Previews/EmojiCatalogPreview.swift` | Searchable grid of all 1,904 emoji |
 | Icon Catalog | `Previews/IconCatalogPreview.swift` | Searchable grid of all 347 icons |
-| Emoji Picker | `Views/EmojiPickerPreview.swift` | Full picker with selection + debug info |
+| Emoji Picker | `Previews/EmojiPickerPreview.swift` | Full picker with selection + debug info |
 | Emoji View | `Views/DiscourseEmojiView.swift` | Shortcode, enum, and fallback display |
 | Emoji Text | `Views/EmojiText.swift` | Inline shortcode + Unicode rendering |
 
@@ -262,25 +300,22 @@ Open the package in Xcode and navigate to any file with `#Preview`:
 
 These are pre-existing and non-blocking:
 - `Text` concatenation deprecated in iOS 26 (use string interpolation) — affects `EmojiText`
-- `UIScreen.main` deprecated in iOS 26 — affects `EmojiPickerView` keyboard handling
 - `file-image` asset name collision with `file` — cosmetic, from icon assets
 
 ### Adding New Emoji/Icons
 
 1. Update `discourse-assets/assets/emojis.json` or `sprite.svg` from your Discourse instance
-2. Run the appropriate generation script
-3. Copy generated assets into `Resources/`
-4. Copy generated Swift files into `Emoji/` or `Icon/`
-5. Build to verify
+2. Run `cd discourse-assets && bash emoji.sh` (or `bash icon.sh`)
+3. Build to verify
 
 ---
 
 ## Submodule
 
 The `discourse-assets/` directory is a git submodule containing:
-- Python generation scripts
-- Source data (`emojis.json`, `sprite.svg`)
-- Asset generation reports
+- Python generation scripts (`discourse_emojis.py`, `generate_emoji_lookups.py`, `generate_emoji_items.py`)
+- Shell orchestrators (`emoji.sh`, `icon.sh`)
+- Source data (`emojis.json`, `data.js`, `sprite.svg`)
 
 ```bash
 # Update submodule
@@ -294,10 +329,12 @@ git submodule update --init --recursive
 | What | Where |
 |------|-------|
 | Package manifest | `Package.swift` |
-| All emoji assets | `Sources/.../Resources/DiscourseEmojis.xcassets/` |
+| All emoji PNGs | `Sources/.../Resources/Emojis/` |
 | All icon assets | `Sources/.../Resources/DiscourseIcons.xcassets/` |
-| Bundled metadata | `Sources/.../Resources/emojis.json` |
+| Image cache + loader | `Sources/.../Emoji/EmojiImageCache.swift` |
 | Resolution logic | `Sources/.../Emoji/EmojiResolver.swift` |
 | Picker UI | `Sources/.../Views/EmojiPickerView.swift` |
-| State management | `Sources/.../Emoji/EmojiPickerStore.swift` |
+| State management | `Sources/.../Emoji/Store/EmojiPickerStore.swift` |
 | Generation scripts | `discourse-assets/*.py` |
+| Generation entry point | `discourse-assets/emoji.sh` |
+| Demo app | `DakDemo/` |

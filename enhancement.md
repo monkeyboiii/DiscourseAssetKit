@@ -1,6 +1,6 @@
 # DiscourseAssetKit — Enhancement Plans
 
-> Architecture review conducted 2026-03-23. Completed items removed; only remaining work listed.
+> Architecture review conducted 2026-03-23. Updated 2026-03-25 (flat PNG migration, image cache).
 
 ---
 
@@ -32,27 +32,9 @@
 
 ## P0 — Critical
 
-### 1b. Size-Aware Resize Cache
-
-**Problem:** `EmojiText` creates a **new `UIGraphicsImageRenderer`** for every inline emoji on every render via `UIImage.resized(to:)`. Base image loading is now cached by `EmojiImageCache`, but the per-size resize still allocates each time.
-
-**Solution:** Add a size-aware cache key (`"\(assetName)_\(width)x\(height)"`) to `EmojiImageCache` or a dedicated resize cache.
-
-**Files:**
-| File | Change |
-|------|--------|
-| `Emoji/EmojiImageCache.swift` | Add `resizedImage(named:size:)` with size-keyed cache |
-| `Views/EmojiText.swift` | Replace `uiImage.resized(to:)` with cached variant |
-
-**Complexity:** Low (~20 lines)
-**Risk:** Low — additive
-**Benefit:** Medium — eliminates per-render `UIGraphicsImageRenderer` allocations in `EmojiText`
-
----
-
 ### 2. Core Test Suite
 
-**Problem:** Only an empty placeholder test exists. The resolver pipeline, lookup table consistency, tone parsing, search logic, and metadata decoding are all untested. Any refactoring (including enhancement 1) is risky without coverage.
+**Problem:** Only an empty placeholder test exists. The resolver pipeline, lookup table consistency, tone parsing, search logic, and metadata decoding are all untested. Any refactoring is risky without coverage.
 
 **Solution:** Add focused test files covering core logic (not UI).
 
@@ -62,9 +44,10 @@
 | `Tests/.../EmojiResolverTests.swift` (new) | Shortcode resolution, alias canonicalization, Unicode resolution, tone parsing, edge cases |
 | `Tests/.../EmojiPickerStoreTests.swift` (new) | Search ranking, normalization, rebuild from bundled JSON |
 | `Tests/.../LookupTableConsistencyTests.swift` (new) | Every alias resolves to a valid enum case; replacement table entries resolve; tonable entries exist |
+| `Tests/.../EmojiImageCacheTests.swift` (new) | Flat PNG loading, cache hit/miss, tone variant loading |
 | `Tests/.../DiscourseAssetKitTests.swift` | Replace placeholder |
 
-**Complexity:** Medium (~250 lines across files)
+**Complexity:** Medium (~300 lines across files)
 **Risk:** Low — purely additive
 **Benefit:** High — enables safe refactoring, catches generated data drift
 
@@ -102,6 +85,26 @@
 
 ---
 
+## P2 — Medium Value
+
+### 1b. Size-Aware Resize Cache
+
+**Problem:** `EmojiText` creates a **new `UIGraphicsImageRenderer`** for every inline emoji on every render via `UIImage.resized(to:)`. Base image loading is now cached by `EmojiImageCache`, but the per-size resize still allocates each time.
+
+**Solution:** Add a size-aware cache key (`"\(assetName)_\(width)x\(height)"`) to `EmojiImageCache` or a dedicated resize cache.
+
+**Files:**
+| File | Change |
+|------|--------|
+| `Emoji/EmojiImageCache.swift` | Add `resizedImage(named:size:)` with size-keyed cache |
+| `Views/EmojiText.swift` | Replace `uiImage.resized(to:)` with cached variant |
+
+**Complexity:** Low (~20 lines)
+**Risk:** Low — additive
+**Benefit:** Medium — eliminates per-render `UIGraphicsImageRenderer` allocations in `EmojiText`
+
+---
+
 ## P3 — Nice-to-Have
 
 ### 4. Lazy Static Table Initialization
@@ -128,11 +131,11 @@
 
 These areas are already well-designed:
 
+- **Flat PNG bundling** — `.copy()` avoids `actool` memory explosion; `EmojiImageCache` with `NSCache` replaces system cache
 - **Bundle.module usage** — consistent throughout, correct for SPM packages
-- **Swift 6 concurrency** — `@MainActor`, `Sendable`, `async/await` all properly applied
-- **Three-tier metadata fallback** — cached → bundled → remote with ETag/304
-- **Atomic file writes** — corruption-safe with `replaceItemAt`
+- **Swift 6 concurrency** — `@MainActor`, `Sendable`, `nonisolated(unsafe)` all properly applied
 - **@Observable pattern** — modern Observation framework for picker state
-- **Generated code separation** — clear boundary between hand-written and generated code
+- **Generated code separation** — clear boundary between hand-written and auto-generated code
 - **Resolution pipeline** — clean O(1) alias → sanitize → enum flow
 - **O(1) enum lookups** — both `DiscourseEmoji` and `DiscourseIcon` use dictionary-backed lookup
+- **Dual-mode generation** — `emoji.sh` supports flat PNGs (default) and `--legacy` xcassets
