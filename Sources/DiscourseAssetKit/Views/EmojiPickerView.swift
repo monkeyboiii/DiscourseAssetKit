@@ -20,13 +20,14 @@ public struct EmojiPickerView: View {
     @State private var lastNonSearchCategoryId = EmojiGroup.recents.id
     @State private var recentIds: [String] = []
     @State private var previewItem: EmojiItem?
-    @State private var keyboardHeight: CGFloat = 0
+    @State private var previewWorkItem: DispatchWorkItem?
+    @State private var lastPreviewDismissTime: Date = .distantPast
+    @State private var lastCategoryChangeTime: Date = .distantPast
     @State private var selectedTone: EmojiSkinTone = EmojiTonePreference.current
     @State private var showTonePicker = false
 
+    @Namespace private var categoryNamespace
     @State private var scrollProxy: ScrollViewProxy?
-    @State private var viewMaxY: CGFloat = 0
-
     private let scrollCoordinateSpace = "emoji-picker-scroll"
 
     public init(selection: Binding<String?>, store: EmojiPickerStore) {
@@ -71,26 +72,6 @@ public struct EmojiPickerView: View {
                 lastNonSearchCategoryId = activeCategoryId
             }
         }
-        .background(
-            GeometryReader { proxy in
-                Color.clear.onAppear {
-                    viewMaxY = proxy.frame(in: .global).maxY
-                }
-                .onChange(of: proxy.frame(in: .global).maxY) { _, newValue in
-                    viewMaxY = newValue
-                }
-            }
-        )
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
-            guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
-            let overlap = max(0, viewMaxY - frame.minY)
-            keyboardHeight = overlap
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-            keyboardHeight = 0
-        }
-        .padding(.bottom, isSearchFocused ? keyboardHeight : 0)
-        .animation(.easeOut(duration: 0.2), value: keyboardHeight)
     }
 
     private var topBar: some View {
@@ -196,16 +177,24 @@ public struct EmojiPickerView: View {
             VStack(spacing: DesignTokens.Spacing.md) {
                 ForEach(categories, id: \.id) { group in
                     Button {
-                        activeCategoryId = group.id
-                        lastNonSearchCategoryId = group.id
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            activeCategoryId = group.id
+                            lastNonSearchCategoryId = group.id
+                        }
                         if !searchText.isEmpty {
                             searchText = ""
                         }
                         scrollToCategory(group.id)
                     } label: {
                         ZStack {
-                            Circle()
-                                .fill(isCategoryActive(group.id) ? Color.accentColor : Color(.systemGray5))
+                            if isCategoryActive(group.id) {
+                                Circle()
+                                    .fill(Color.accentColor)
+                                    .matchedGeometryEffect(id: "activeCategory", in: categoryNamespace)
+                            } else {
+                                Circle()
+                                    .fill(Color(.systemGray5))
+                            }
                             if let img = EmojiResolver.resolvedImage(for: group.discourseIcon, tone: selectedTone) {
                                 Image(uiImage: img)
                                     .resizable()
@@ -237,6 +226,7 @@ public struct EmojiPickerView: View {
                 .padding(.trailing, DesignTokens.Spacing.md)
                 .padding(.bottom, DesignTokens.Spacing.md)
             }
+            .scrollDismissesKeyboard(.interactively)
             .coordinateSpace(name: scrollCoordinateSpace)
             .onPreferenceChange(SectionHeaderPreferenceKey.self) { values in
                 guard searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
@@ -339,6 +329,7 @@ public struct EmojiPickerView: View {
         return LazyVGrid(columns: columns, spacing: DesignTokens.Spacing.md) {
             ForEach(items) { item in
                 Button {
+                    guard Date().timeIntervalSince(lastPreviewDismissTime) > 0.3 else { return }
                     var name = item.baseName
                     if item.tonable && selectedTone != .default {
                         name += selectedTone.suffix
@@ -355,13 +346,20 @@ public struct EmojiPickerView: View {
                 .buttonStyle(EmojiCellButtonStyle())
                 .accessibilityLabel(Text(prettyName(item.baseName)))
                 .onLongPressGesture(
-                    minimumDuration: 0.35,
-                    maximumDistance: 20,
+                    minimumDuration: 0.9,
+                    maximumDistance: 40,
                     pressing: { isPressing in
                         if isPressing {
-                            previewItem = item
-                        } else if previewItem?.id == item.id {
-                            previewItem = nil
+                            let work = DispatchWorkItem { previewItem = item }
+                            previewWorkItem = work
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+                        } else {
+                            previewWorkItem?.cancel()
+                            previewWorkItem = nil
+                            if previewItem?.id == item.id {
+                                previewItem = nil
+                                lastPreviewDismissTime = Date()
+                            }
                         }
                     },
                     perform: {}
@@ -453,8 +451,15 @@ public struct EmojiPickerView: View {
         }
         let nextActive = best ?? orderedIds.first(where: { values[$0] != nil }) ?? activeCategoryId
         if nextActive != activeCategoryId {
-            activeCategoryId = nextActive
-            lastNonSearchCategoryId = nextActive
+            let now = Date()
+            guard now.timeIntervalSince(lastCategoryChangeTime) > 0.15 else { return }
+            lastCategoryChangeTime = now
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                activeCategoryId = nextActive
+                lastNonSearchCategoryId = nextActive
+            }
         }
     }
 
