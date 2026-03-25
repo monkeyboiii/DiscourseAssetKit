@@ -3,8 +3,7 @@
 // swiftlint:disable file_length
 
 enum EmojiReplacementTable {
-    /// Unicode emoji character -> canonical shortcode
-    static let unicodeToShortcode: [String: String] = [
+    private static let _unicode0: [String: String] = [
         "👍": "+1",
         "👍🏻": "+1:t2",
         "👍🏼": "+1:t3",
@@ -505,6 +504,9 @@ enum EmojiReplacementTable {
         "🛃": "customs",
         "🥩": "cut_of_meat",
         "🌀": "cyclone",
+    ]
+
+    private static let _unicode1: [String: String] = [
         "🇨🇾": "cyprus",
         "🇨🇿": "czechia",
         "🇨🇮": "côte_d_ivoire",
@@ -1005,6 +1007,9 @@ enum EmojiReplacementTable {
         "🇮🇸": "iceland",
         "🆔": "id_button",
         "🪪": "identification_card",
+    ]
+
+    private static let _unicode2: [String: String] = [
         "⛳": "in_hole",
         "📥": "inbox_tray",
         "📨": "incoming_envelope",
@@ -1505,6 +1510,9 @@ enum EmojiReplacementTable {
         "🤽🏽‍♂️": "man_playing_water_polo:t4",
         "🤽🏾‍♂️": "man_playing_water_polo:t5",
         "🤽🏿‍♂️": "man_playing_water_polo:t6",
+    ]
+
+    private static let _unicode3: [String: String] = [
         "👮‍♂️": "man_police_officer",
         "👮🏻‍♂️": "man_police_officer:t2",
         "👮🏼‍♂️": "man_police_officer:t3",
@@ -2005,6 +2013,9 @@ enum EmojiReplacementTable {
         "🚴🏾": "person_biking:t5",
         "🚴🏿": "person_biking:t6",
         "👱": "person_blond_hair",
+    ]
+
+    private static let _unicode4: [String: String] = [
         "👱🏻": "person_blond_hair:t2",
         "👱🏼": "person_blond_hair:t3",
         "👱🏽": "person_blond_hair:t4",
@@ -2505,6 +2516,9 @@ enum EmojiReplacementTable {
         "♐": "sagittarius",
         "⛵": "sailboat",
         "🍶": "sake",
+    ]
+
+    private static let _unicode5: [String: String] = [
         "🧂": "salt",
         "🫡": "saluting_face",
         "🇼🇸": "samoa",
@@ -3005,6 +3019,9 @@ enum EmojiReplacementTable {
         "🙇🏾‍♀️": "woman_bowing:t5",
         "🙇🏿‍♀️": "woman_bowing:t6",
         "🤸‍♀️": "woman_cartwheeling",
+    ]
+
+    private static let _unicode6: [String: String] = [
         "🤸🏻‍♀️": "woman_cartwheeling:t2",
         "🤸🏼‍♀️": "woman_cartwheeling:t3",
         "🤸🏽‍♀️": "woman_cartwheeling:t4",
@@ -3424,6 +3441,18 @@ enum EmojiReplacementTable {
         "💤": "zzz",
         "🇦🇽": "åland_islands",
     ]
+
+    /// Unicode emoji character -> canonical shortcode
+    static let unicodeToShortcode: [String: String] = {
+        var d = _unicode0
+        d.merge(_unicode1, uniquingKeysWith: { _, new in new })
+        d.merge(_unicode2, uniquingKeysWith: { _, new in new })
+        d.merge(_unicode3, uniquingKeysWith: { _, new in new })
+        d.merge(_unicode4, uniquingKeysWith: { _, new in new })
+        d.merge(_unicode5, uniquingKeysWith: { _, new in new })
+        d.merge(_unicode6, uniquingKeysWith: { _, new in new })
+        return d
+    }()
 
     /// Emoticon text -> canonical shortcode
     static let emoticonToShortcode: [String: String] = [

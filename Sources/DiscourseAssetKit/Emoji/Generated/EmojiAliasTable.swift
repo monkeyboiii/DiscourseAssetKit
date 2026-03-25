@@ -3,8 +3,7 @@
 // swiftlint:disable file_length
 
 enum EmojiAliasTable {
-    /// Alias name -> canonical name
-    static let aliases: [String: String] = [
+    private static let _aliases0: [String: String] = [
         "8ball": "pool_8_ball",
         "a": "a_button_blood_type",
         "ab": "ab_button_blood_type",
@@ -505,6 +504,9 @@ enum EmojiAliasTable {
         "old_person": "older_person",
         "older_adult": "older_person",
         "older_man": "old_man",
+    ]
+
+    private static let _aliases1: [String: String] = [
         "older_woman": "old_woman",
         "om_symbol": "om",
         "on": "on_arrow",
@@ -778,6 +780,13 @@ enum EmojiAliasTable {
         "zap": "high_voltage",
         "zipper_mouth": "zipper_mouth_face",
     ]
+
+    /// Alias name -> canonical name
+    static let aliases: [String: String] = {
+        var d = _aliases0
+        d.merge(_aliases1, uniquingKeysWith: { _, new in new })
+        return d
+    }()
 
     /// Canonical name -> alias names (for search augmentation)
     static let canonicalToAliases: [String: [String]] = [
