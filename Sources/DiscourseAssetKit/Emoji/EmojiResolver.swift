@@ -84,11 +84,11 @@ public enum EmojiResolver {
     /// Falls back to base asset if tone variant is missing.
     public static func resolvedImage(for emoji: DiscourseEmoji, tone: EmojiSkinTone) -> UIImage? {
         guard tone != .default else {
-            return EmojiImageCache.image(named: emoji.rawValue)
+            return UIImage(named: emoji.rawValue, in: .module, compatibleWith: nil)
         }
         let toneAssetName = "\(emoji.rawValue)_t\(tone.rawValue)"
-        return EmojiImageCache.image(named: toneAssetName)
-            ?? EmojiImageCache.image(named: emoji.rawValue)
+        return UIImage(named: toneAssetName, in: .module, compatibleWith: nil)
+            ?? UIImage(named: emoji.rawValue, in: .module, compatibleWith: nil)
     }
 
     /// Check if a given canonical shortcode supports skin tones.

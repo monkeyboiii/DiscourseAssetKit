@@ -11,7 +11,7 @@ public struct DiscourseEmojiView: View {
 
     public var body: some View {
         Group {
-            if let uiImage = EmojiImageCache.image(named: assetName) {
+            if let uiImage = UIImage(named: assetName, in: .module, compatibleWith: nil) {
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFit()

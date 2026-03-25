@@ -2,6 +2,8 @@
 
 // swiftlint:disable file_length
 
+import SwiftUI
+
 public enum DiscourseEmoji: String, CaseIterable, Sendable {
     case emoji100 = "emoji_100"
     case emoji1234 = "emoji_1234"
@@ -3417,4 +3419,8 @@ public enum DiscourseEmoji: String, CaseIterable, Sendable {
     case emojiZipperMouthFace = "emoji_zipper_mouth_face"
     case emojiZombie = "emoji_zombie"
     case emojiZzz = "emoji_zzz"
+}
+
+extension DiscourseEmoji {
+    public var image: Image { Image(self.rawValue, bundle: .module) }
 }
