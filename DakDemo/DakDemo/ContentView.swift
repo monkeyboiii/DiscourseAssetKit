@@ -9,6 +9,7 @@ import DiscourseAssetKit
 struct ContentView: View {
     @State private var selection: String?
     @State private var showPicker = false
+    @State private var showProfiler = false
     @State private var store = EmojiPickerStore()
 
     var body: some View {
@@ -30,16 +31,37 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Button("Open Emoji Picker") {
-                showPicker = true
+            HStack(spacing: 12) {
+                Button("Open Emoji Picker") {
+                    showPicker = true
+                }
+                .buttonStyle(.borderedProminent)
+
+                Button {
+                    showProfiler.toggle()
+                } label: {
+                    Image(systemName: showProfiler ? "timer.circle.fill" : "timer")
+                }
+                .buttonStyle(.bordered)
+                .tint(showProfiler ? .orange : nil)
             }
-            .buttonStyle(.borderedProminent)
         }
         .padding()
         .sheet(isPresented: $showPicker) {
-            EmojiPickerView(selection: $selection, store: store)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+            ZStack(alignment: .bottom) {
+                EmojiPickerView(selection: $selection, store: store)
+
+                if showProfiler {
+                    ProfilerView()
+                        .padding(.horizontal)
+                        .padding(.bottom, 8)
+                        .allowsHitTesting(false)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.easeInOut(duration: 0.25), value: showProfiler)
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
     }
 }
