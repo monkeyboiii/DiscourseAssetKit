@@ -26,7 +26,6 @@ public struct EmojiPickerView: View {
     @State private var selectedTone: EmojiSkinTone = EmojiTonePreference.current
     @State private var showTonePicker = false
 
-    @Namespace private var categoryNamespace
     @State private var scrollProxy: ScrollViewProxy?
     private let scrollCoordinateSpace = "emoji-picker-scroll"
 
@@ -41,7 +40,14 @@ public struct EmojiPickerView: View {
                 topBar
 
                 HStack(spacing: DesignTokens.Spacing.lg) {
-                    categoryRail
+                    CategoryRailView(
+                        categories: categories,
+                        activeCategoryId: $activeCategoryId,
+                        lastNonSearchCategoryId: $lastNonSearchCategoryId,
+                        searchText: $searchText,
+                        selectedTone: selectedTone,
+                        scrollToCategory: scrollToCategory
+                    )
                     Divider()
                     contentArea
                 }
@@ -172,47 +178,6 @@ public struct EmojiPickerView: View {
         }
     }
 
-    private var categoryRail: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: DesignTokens.Spacing.md) {
-                ForEach(categories, id: \.id) { group in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            activeCategoryId = group.id
-                            lastNonSearchCategoryId = group.id
-                        }
-                        if !searchText.isEmpty {
-                            searchText = ""
-                        }
-                        scrollToCategory(group.id)
-                    } label: {
-                        ZStack {
-                            if isCategoryActive(group.id) {
-                                Circle()
-                                    .fill(Color.accentColor)
-                                    .matchedGeometryEffect(id: "activeCategory", in: categoryNamespace)
-                            } else {
-                                Circle()
-                                    .fill(Color(.systemGray5))
-                            }
-                            if let img = EmojiResolver.resolvedImage(for: group.discourseIcon, tone: selectedTone) {
-                                Image(uiImage: img)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: DesignTokens.Picker.railIconSize, height: DesignTokens.Picker.railIconSize)
-                            }
-                        }
-                        .frame(width: DesignTokens.Picker.railButtonSize, height: DesignTokens.Picker.railButtonSize)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(Text(group.displayName))
-                }
-            }
-            .padding(.vertical, DesignTokens.Spacing.xs)
-        }
-        .frame(width: DesignTokens.Picker.railButtonSize)
-    }
-
     private var contentArea: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: true) {
@@ -339,7 +304,7 @@ public struct EmojiPickerView: View {
                     reloadRecents()
                     dismiss()
                 } label: {
-                    emojiCellImage(item: item, size: DesignTokens.Picker.emojiSize)
+                    EmojiAsyncCell(item: item, size: DesignTokens.Picker.emojiSize, tone: selectedTone)
                         .frame(width: DesignTokens.Picker.minCellSize, height: DesignTokens.Picker.minCellSize)
                         .contentShape(Rectangle())
                 }
@@ -366,27 +331,13 @@ public struct EmojiPickerView: View {
                 )
             }
         }
-        .id(selectedTone)
-    }
-
-    @ViewBuilder
-    private func emojiCellImage(item: EmojiItem, size: CGFloat) -> some View {
-        if item.tonable && selectedTone != .default,
-           let tinted = EmojiResolver.resolvedImage(for: item.emoji, tone: selectedTone) {
-            Image(uiImage: tinted)
-                .resizable()
-                .scaledToFit()
-                .frame(width: size, height: size)
-        } else {
-            DiscourseEmojiView(emoji: item.emoji, size: size)
-        }
     }
 
     private func previewOverlay(_ item: EmojiItem) -> some View {
         ZStack {
             Color.black.opacity(0.2)
             VStack(spacing: DesignTokens.Spacing.md) {
-                emojiCellImage(item: item, size: DesignTokens.Picker.previewEmojiSize)
+                emojiCellImage(item: item, size: DesignTokens.Picker.previewEmojiSize, tone: selectedTone)
                 Text(prettyName(item.baseName))
                     .font(.headline)
                     .foregroundStyle(.primary)
@@ -429,13 +380,6 @@ public struct EmojiPickerView: View {
         scrollProxy?.scrollTo(id, anchor: .top)
     }
 
-    private func isCategoryActive(_ id: String) -> Bool {
-        if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return activeCategoryId == id
-        }
-        return lastNonSearchCategoryId == id
-    }
-
     private func updateActiveCategory(from values: [String: CGFloat]) {
         guard !values.isEmpty else { return }
         // Walk categories in document order; pick the last one whose header
@@ -452,7 +396,7 @@ public struct EmojiPickerView: View {
         let nextActive = best ?? orderedIds.first(where: { values[$0] != nil }) ?? activeCategoryId
         if nextActive != activeCategoryId {
             let now = Date()
-            guard now.timeIntervalSince(lastCategoryChangeTime) > 0.15 else { return }
+            guard now.timeIntervalSince(lastCategoryChangeTime) > 0.25 else { return }
             lastCategoryChangeTime = now
             var transaction = Transaction()
             transaction.disablesAnimations = true
@@ -465,6 +409,57 @@ public struct EmojiPickerView: View {
 
     private func prettyName(_ name: String) -> String {
         name.replacingOccurrences(of: "_", with: " ")
+    }
+}
+
+private struct CategoryRailView: View {
+    let categories: [EmojiGroup]
+    @Binding var activeCategoryId: String
+    @Binding var lastNonSearchCategoryId: String
+    @Binding var searchText: String
+    let selectedTone: EmojiSkinTone
+    let scrollToCategory: (String) -> Void
+
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: DesignTokens.Spacing.md) {
+                ForEach(categories, id: \.id) { group in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            activeCategoryId = group.id
+                            lastNonSearchCategoryId = group.id
+                        }
+                        if !searchText.isEmpty {
+                            searchText = ""
+                        }
+                        scrollToCategory(group.id)
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(isCategoryActive(group.id) ? Color.accentColor : Color(.systemGray5))
+                            if let img = EmojiResolver.resolvedImage(for: group.discourseIcon, tone: selectedTone) {
+                                Image(uiImage: img)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: DesignTokens.Picker.railIconSize, height: DesignTokens.Picker.railIconSize)
+                            }
+                        }
+                        .frame(width: DesignTokens.Picker.railButtonSize, height: DesignTokens.Picker.railButtonSize)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(group.displayName))
+                }
+            }
+            .padding(.vertical, DesignTokens.Spacing.xs)
+        }
+        .frame(width: DesignTokens.Picker.railButtonSize)
+    }
+
+    private func isCategoryActive(_ id: String) -> Bool {
+        if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return activeCategoryId == id
+        }
+        return lastNonSearchCategoryId == id
     }
 }
 
