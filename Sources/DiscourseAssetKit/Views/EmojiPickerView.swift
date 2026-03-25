@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import UIKit
 
 public struct EmojiPickerView: View {
     @Binding var selection: String?
@@ -24,7 +23,6 @@ public struct EmojiPickerView: View {
     @State private var lastPreviewDismissTime: Date = .distantPast
     @State private var lastCategoryChangeTime: Date = .distantPast
     @State private var selectedTone: EmojiSkinTone = EmojiTonePreference.current
-    @State private var showTonePicker = false
 
     @State private var scrollProxy: ScrollViewProxy?
     private let scrollCoordinateSpace = "emoji-picker-scroll"
@@ -33,6 +31,12 @@ public struct EmojiPickerView: View {
         self._selection = selection
         self.store = store
     }
+
+    private var trimmedSearch: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // MARK: - Body
 
     public var body: some View {
         ZStack {
@@ -63,28 +67,28 @@ public struct EmojiPickerView: View {
             )
 
             if let previewItem {
-                previewOverlay(previewItem)
+                EmojiPreviewOverlay(item: previewItem, tone: selectedTone)
             }
         }
         .onAppear {
             reloadRecents()
         }
-        .onChange(of: searchText) { _, newValue in
-            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty {
-                let target = lastNonSearchCategoryId
-                scrollToCategory(target)
+        .onChange(of: searchText) { _, _ in
+            if trimmedSearch.isEmpty {
+                scrollToCategory(lastNonSearchCategoryId)
             } else {
                 lastNonSearchCategoryId = activeCategoryId
             }
         }
     }
 
+    // MARK: - Top Bar
+
     private var topBar: some View {
         HStack(spacing: DesignTokens.Spacing.lg) {
             searchPill
                 .frame(maxWidth: .infinity)
-            topRightIndicator
+            TonePickerButton(selectedTone: $selectedTone)
         }
     }
 
@@ -117,72 +121,13 @@ public struct EmojiPickerView: View {
         )
     }
 
-    private var topRightIndicator: some View {
-        Button {
-            showTonePicker.toggle()
-        } label: {
-            if let img = EmojiResolver.resolvedImage(for: .emojiClap, tone: selectedTone) {
-                Image(uiImage: img)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: DesignTokens.Picker.toneIndicatorSize, height: DesignTokens.Picker.toneIndicatorSize)
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text("Skin tone options"))
-        .popover(isPresented: $showTonePicker, arrowEdge: .top) {
-            tonePickerContent
-                .presentationCompactAdaptation(.popover)
-        }
-    }
-
-    private var tonePickerContent: some View {
-        HStack(spacing: DesignTokens.Spacing.sm) {
-            ForEach(EmojiSkinTone.allCases) { tone in
-                Button {
-                    selectedTone = tone
-                    EmojiTonePreference.current = tone
-                    showTonePicker = false
-                } label: {
-                    ZStack {
-                        if let img = EmojiResolver.resolvedImage(for: .emojiClap, tone: tone) {
-                            Image(uiImage: img)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: DesignTokens.Picker.toneSwatchSize, height: DesignTokens.Picker.toneSwatchSize)
-                        }
-
-                        if tone == selectedTone {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(tone == .default || tone == .light ? .black : .white)
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text(toneAccessibilityLabel(tone)))
-            }
-        }
-        .padding(.horizontal, DesignTokens.Spacing.lg)
-        .padding(.vertical, 10)
-    }
-
-    private func toneAccessibilityLabel(_ tone: EmojiSkinTone) -> String {
-        switch tone {
-        case .default:     return "Default"
-        case .light:       return "Light skin tone"
-        case .mediumLight: return "Medium-light skin tone"
-        case .medium:      return "Medium skin tone"
-        case .mediumDark:  return "Medium-dark skin tone"
-        case .dark:        return "Dark skin tone"
-        }
-    }
+    // MARK: - Content Area
 
     private var contentArea: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: DesignTokens.Spacing.xl) {
-                    if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    if trimmedSearch.isEmpty {
                         groupedContent
                     } else {
                         resultsContent
@@ -194,7 +139,7 @@ public struct EmojiPickerView: View {
             .scrollDismissesKeyboard(.interactively)
             .coordinateSpace(name: scrollCoordinateSpace)
             .onPreferenceChange(SectionHeaderPreferenceKey.self) { values in
-                guard searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+                guard trimmedSearch.isEmpty else { return }
                 updateActiveCategory(from: values)
             }
             .onAppear {
@@ -289,6 +234,8 @@ public struct EmojiPickerView: View {
         )
     }
 
+    // MARK: - Emoji Grid
+
     private func emojiGrid(items: [EmojiItem]) -> some View {
         let columns = [GridItem(.adaptive(minimum: DesignTokens.Picker.minCellSize), spacing: DesignTokens.Spacing.md)]
         return LazyVGrid(columns: columns, spacing: DesignTokens.Spacing.md) {
@@ -309,7 +256,7 @@ public struct EmojiPickerView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(EmojiCellButtonStyle())
-                .accessibilityLabel(Text(prettyName(item.baseName)))
+                .accessibilityLabel(Text(Self.prettyName(item.baseName)))
                 .onLongPressGesture(
                     minimumDuration: 0.9,
                     maximumDistance: 40,
@@ -333,24 +280,7 @@ public struct EmojiPickerView: View {
         }
     }
 
-    private func previewOverlay(_ item: EmojiItem) -> some View {
-        ZStack {
-            Color.black.opacity(0.2)
-            VStack(spacing: DesignTokens.Spacing.md) {
-                emojiCellImage(item: item, size: DesignTokens.Picker.previewEmojiSize, tone: selectedTone)
-                Text(prettyName(item.baseName))
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-            }
-            .padding(DesignTokens.Spacing.xl)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: DesignTokens.CornerRadius.md, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DesignTokens.CornerRadius.md, style: .continuous)
-                    .strokeBorder(.separator.opacity(0.35), lineWidth: 0.5)
-            )
-        }
-        .transition(.opacity)
-    }
+    // MARK: - Data Helpers
 
     private var categories: [EmojiGroup] {
         if recentIds.isEmpty {
@@ -376,14 +306,18 @@ public struct EmojiPickerView: View {
         }
     }
 
+    static func prettyName(_ name: String) -> String {
+        name.replacingOccurrences(of: "_", with: " ")
+    }
+
+    // MARK: - Scroll Tracking
+
     private func scrollToCategory(_ id: String) {
         scrollProxy?.scrollTo(id, anchor: .top)
     }
 
     private func updateActiveCategory(from values: [String: CGFloat]) {
         guard !values.isEmpty else { return }
-        // Walk categories in document order; pick the last one whose header
-        // has scrolled to or past the top (minY ≤ threshold).
         let threshold: CGFloat = 40
         let orderedIds = categories.map(\.id)
         var best: String?
@@ -406,11 +340,92 @@ public struct EmojiPickerView: View {
             }
         }
     }
+}
 
-    private func prettyName(_ name: String) -> String {
-        name.replacingOccurrences(of: "_", with: " ")
+// MARK: - Tone Picker
+
+private struct TonePickerButton: View {
+    @Binding var selectedTone: EmojiSkinTone
+    @State private var showPicker = false
+
+    var body: some View {
+        Button {
+            showPicker.toggle()
+        } label: {
+            if let img = EmojiResolver.resolvedImage(for: .emojiClap, tone: selectedTone) {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: DesignTokens.Picker.toneIndicatorSize, height: DesignTokens.Picker.toneIndicatorSize)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text("Skin tone options"))
+        .popover(isPresented: $showPicker, arrowEdge: .top) {
+            toneSwatches
+                .presentationCompactAdaptation(.popover)
+        }
+    }
+
+    private var toneSwatches: some View {
+        HStack(spacing: DesignTokens.Spacing.sm) {
+            ForEach(EmojiSkinTone.allCases) { tone in
+                Button {
+                    selectedTone = tone
+                    EmojiTonePreference.current = tone
+                    showPicker = false
+                } label: {
+                    ZStack {
+                        if let img = EmojiResolver.resolvedImage(for: .emojiClap, tone: tone) {
+                            Image(uiImage: img)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: DesignTokens.Picker.toneSwatchSize, height: DesignTokens.Picker.toneSwatchSize)
+                        }
+
+                        if tone == selectedTone {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(tone == .default || tone == .light ? .black : .white)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(tone.accessibilityLabel))
+            }
+        }
+        .padding(.horizontal, DesignTokens.Spacing.lg)
+        .padding(.vertical, DesignTokens.Spacing.lg)
     }
 }
+
+// MARK: - Preview Overlay
+
+private struct EmojiPreviewOverlay: View {
+    let item: EmojiItem
+    let tone: EmojiSkinTone
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.2)
+            VStack(spacing: DesignTokens.Spacing.md) {
+                EmojiAsyncCell.syncImage(item: item, size: DesignTokens.Picker.previewEmojiSize, tone: tone)
+                Text(EmojiPickerView.prettyName(item.baseName))
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+            }
+            .padding(DesignTokens.Spacing.xl)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: DesignTokens.CornerRadius.md, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DesignTokens.CornerRadius.md, style: .continuous)
+                    .strokeBorder(.separator.opacity(0.35), lineWidth: 0.5)
+            )
+        }
+        .transition(.opacity)
+    }
+}
+
+// MARK: - Category Rail
 
 private struct CategoryRailView: View {
     let categories: [EmojiGroup]
@@ -462,6 +477,8 @@ private struct CategoryRailView: View {
         return lastNonSearchCategoryId == id
     }
 }
+
+// MARK: - Supporting Types
 
 private struct EmojiCellButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {

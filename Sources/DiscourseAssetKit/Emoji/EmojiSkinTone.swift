@@ -23,6 +23,18 @@ public enum EmojiSkinTone: Int, CaseIterable, Identifiable, Sendable {
     public var suffix: String {
         self == .default ? "" : ":t\(rawValue)"
     }
+
+    /// Human-readable label for VoiceOver.
+    public var accessibilityLabel: String {
+        switch self {
+        case .default:     "Default"
+        case .light:       "Light skin tone"
+        case .mediumLight: "Medium-light skin tone"
+        case .medium:      "Medium skin tone"
+        case .mediumDark:  "Medium-dark skin tone"
+        case .dark:        "Dark skin tone"
+        }
+    }
 }
 
 // MARK: - Persistence
