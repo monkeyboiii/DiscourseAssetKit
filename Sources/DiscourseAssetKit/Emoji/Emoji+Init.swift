@@ -18,7 +18,7 @@ extension DiscourseEmoji {
         rawValueLookup[rawValue]
     }
 
-    /// reference logic in https://github.com/monkeyboiii/discourse-assets discourse_emoji.py _sanitize_shortcode_to_asset
+    /// reference logic in https://github.com/monkeyboiii/discourse-assets/blob/main/discourse_emojis.py#L52-L66
     public static func sanitizeShortcodeToAssetName(_ shortcodeWithColons: String) -> String {
         let colonSet = CharacterSet(charactersIn: ":")
         var shortcode = shortcodeWithColons.trimmingCharacters(in: colonSet)

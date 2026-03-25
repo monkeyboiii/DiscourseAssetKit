@@ -18,12 +18,22 @@ public final class EmojiPickerStore {
     private let logger = Logger(subsystem: "DiscourseAssetKit", category: "EmojiPickerStore")
 
     public init() {
+        #if DEBUG
+        let start = CFAbsoluteTimeGetCurrent()
+        #endif
         loadFromTable()
+        #if DEBUG
+        let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000
+        logger.trace("init completed in \(elapsed, format: .fixed(precision: 2))ms")
+        #endif
     }
 
     // MARK: - Search
 
     public func search(_ rawQuery: String) -> [EmojiItem] {
+        #if DEBUG
+        let start = CFAbsoluteTimeGetCurrent()
+        #endif
         let trimmed = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
 
@@ -32,7 +42,10 @@ public final class EmojiPickerStore {
             let base = shortcode.split(separator: ":").first.map(String.init) ?? shortcode
             let canonical = EmojiResolver.canonicalize(base)
             if let item = allItems.first(where: { $0.baseName == canonical }) {
-                logger.debug("Search: Unicode match '\(trimmed)' → \(item.baseName)")
+                #if DEBUG
+                let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000
+                logger.trace("Search: Unicode match '\(trimmed)' → \(item.baseName) in \(elapsed, format: .fixed(precision: 2))ms")
+                #endif
                 return [item]
             }
         }
@@ -50,7 +63,10 @@ public final class EmojiPickerStore {
                 return lhs.baseName < rhs.baseName
             }
 
-        logger.debug("Search: '\(rawQuery)' → \(results.count) results")
+        #if DEBUG
+        let elapsed = (CFAbsoluteTimeGetCurrent() - start) * 1000
+        logger.trace("Search: '\(rawQuery)' → \(results.count) results in \(elapsed, format: .fixed(precision: 2))ms")
+        #endif
         return results
     }
 
