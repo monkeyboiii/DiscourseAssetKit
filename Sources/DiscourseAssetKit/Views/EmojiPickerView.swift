@@ -257,6 +257,8 @@ public struct EmojiPickerView: View {
                 }
                 .buttonStyle(EmojiCellButtonStyle())
                 .accessibilityLabel(Text(Self.prettyName(item.baseName)))
+                .accessibilityAddTraits(.isImage)
+                .accessibilityHint(Text("Double tap to select"))
                 .onLongPressGesture(
                     minimumDuration: 0.9,
                     maximumDistance: 40,
@@ -463,6 +465,7 @@ private struct CategoryRailView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(Text(group.displayName))
+                    .accessibilityHint(Text("Double tap to jump to category"))
                 }
             }
             .padding(.vertical, DesignTokens.Spacing.xs)

@@ -23,6 +23,7 @@ public struct DiscourseIconView: View {
             .scaledToFit()
             .frame(width: size, height: size)
             .foregroundStyle(color)
-            .accessibilityLabel(Text(icon.rawValue))
+            .accessibilityLabel(Text(icon.rawValue.replacingOccurrences(of: "-", with: " ")))
+            .accessibilityAddTraits(.isImage)
     }
 }

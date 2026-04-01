@@ -1,6 +1,6 @@
 # DiscourseAssetKit — Enhancement Plans
 
-> Architecture review conducted 2026-03-23. Updated 2026-03-25 (flat PNG migration, image cache).
+> Architecture review conducted 2026-03-23. Updated 2026-03-25 (flat PNG migration, image cache, accessibility).
 
 ---
 
@@ -11,10 +11,10 @@
 | 1 | ~~[Image Cache Layer](#1-image-cache-layer)~~ | ~~P0~~ | ~~Medium~~ | ~~Low~~ | ~~High~~ |
 | 1b | [Size-Aware Resize Cache](#1b-size-aware-resize-cache) | P2 | Low (~20 lines) | Low | Medium |
 | 2 | [Core Test Suite](#2-core-test-suite) | P0 | Medium (~250 lines) | Low | High |
-| 3 | [Accessibility Improvements](#3-accessibility-improvements) | P1 | Low (~20 lines) | Low | Medium |
+| 3 | ~~[Accessibility Improvements](#3-accessibility-improvements)~~ | ~~P1~~ | ~~Low (~20 lines)~~ | ~~Low~~ | ~~Medium~~ |
 | 4 | [Lazy Static Table Initialization](#4-lazy-static-table-initialization) | P3 | High (~100+ lines) | Medium | Low |
 
-**Recommended order:** 2 → 3 → 1b → 4 (only if profiling warrants)
+**Recommended order:** 2 → 1b → 4 (only if profiling warrants)
 
 ---
 
@@ -27,6 +27,7 @@
 - ~~Design System Constants~~ — `DesignTokens.swift` with spacing/radius/sizing tokens
 - ~~EmojiCatalogPreview Full Display~~ — `.prefix(200)` removed, shows all emoji
 - ~~Image Cache Layer~~ — `EmojiImageCache` with `NSCache` implemented as part of flat PNG migration (replaces `UIImage(named:in:.module)` which had system cache; `UIImage(contentsOfFile:)` does not)
+- ~~Accessibility Improvements~~ — human-readable labels (strip `emoji_`/kebab-case), `.isImage` trait on emoji/icon views, `accessibilityLabel` on `EmojiText`, hints on picker grid items and category rail
 
 ---
 
@@ -50,38 +51,6 @@
 **Complexity:** Medium (~300 lines across files)
 **Risk:** Low — purely additive
 **Benefit:** High — enables safe refactoring, catches generated data drift
-
----
-
-## P1 — High Value
-
-### 3. Accessibility Improvements
-
-**Problem:**
-- `DiscourseEmojiView` reads raw asset name (e.g., "emoji_motorcycle") to VoiceOver — basic label exists but not human-readable
-- `DiscourseIconView` reads kebab-case (e.g., "bell-slash") — basic label exists but not human-readable
-- `EmojiText` has **zero** accessibility — screen readers get no info about inline emoji
-- `EmojiPickerView` grid items and category buttons lack accessibility labels/hints
-
-**What's done:** Basic `.accessibilityLabel()` on `DiscourseEmojiView` and `DiscourseIconView`, plus labels on picker search/tone buttons.
-
-**Remaining work:**
-- Derive human-readable labels (strip `emoji_` prefix, replace `_`/`-` with spaces)
-- Add `.isImage` trait to emoji/icon views
-- Add `.accessibilityLabel()` to `EmojiText` inline emoji
-- Add hints/labels for picker grid items and category rail
-
-**Files:**
-| File | Change |
-|------|--------|
-| `Views/DiscourseEmojiView.swift` | Human-readable label + `.isImage` trait |
-| `Icon/DiscourseIconView.swift` | Human-readable label + `.isImage` trait |
-| `Views/EmojiText.swift` | `.accessibilityLabel()` with readable text |
-| `Views/EmojiPickerView.swift` | Grid item labels, category rail hints |
-
-**Complexity:** Low (~20 lines remaining)
-**Risk:** Low — additive modifiers only
-**Benefit:** Medium — required for accessibility compliance
 
 ---
 

@@ -22,7 +22,14 @@ public struct DiscourseEmojiView: View {
             }
         }
         .frame(width: size, height: size)
-        .accessibilityLabel(Text(assetName))
+        .accessibilityLabel(Text(Self.humanReadableName(assetName)))
+        .accessibilityAddTraits(.isImage)
+    }
+
+    private static func humanReadableName(_ assetName: String) -> String {
+        var name = assetName
+        if name.hasPrefix("emoji_") { name = String(name.dropFirst(6)) }
+        return name.replacingOccurrences(of: "_", with: " ")
     }
 
     // MARK: - Initializers

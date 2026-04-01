@@ -18,6 +18,7 @@ public struct EmojiText: View {
 
     public var body: some View {
         buildText()
+            .accessibilityLabel(Text(accessibleDescription))
     }
 
     private func buildText() -> Text {
@@ -31,6 +32,30 @@ public struct EmojiText: View {
                 result = result + Text(Image(uiImage: img))
             case .text(let str):
                 result = result + replaceUnicodeEmoji(in: str)
+            }
+        }
+        return result
+    }
+
+    /// Builds a VoiceOver-friendly string: shortcodes and Unicode emoji become readable names.
+    private var accessibleDescription: String {
+        // Replace :shortcode: with readable name
+        let pattern = /:([a-zA-Z0-9_+-]+(?::t[2-6])?):/
+        var text = rawText
+        while let match = text.firstMatch(of: pattern) {
+            let code = String(match.output.1).split(separator: ":").first.map(String.init) ?? String(match.output.1)
+            let readable = code.replacingOccurrences(of: "_", with: " ").replacingOccurrences(of: "-", with: " ")
+            text.replaceSubrange(match.range, with: readable)
+        }
+        // Replace Unicode emoji with their resolved names
+        var result = ""
+        for char in text {
+            if let resolved = EmojiResolver.resolveUnicodeWithTone(String(char)) {
+                var name = resolved.emoji.rawValue
+                if name.hasPrefix("emoji_") { name = String(name.dropFirst(6)) }
+                result += name.replacingOccurrences(of: "_", with: " ")
+            } else {
+                result.append(char)
             }
         }
         return result
