@@ -8,8 +8,29 @@
 import SwiftUI
 
 public struct EmojiPickerView: View {
+
+    // MARK: - Configuration
+
+    public struct Configuration: Sendable {
+        public var isSkinTonePickerEnabled: Bool
+        public var onLockedToneTap: (@MainActor @Sendable () -> Void)?
+
+        public init(
+            isSkinTonePickerEnabled: Bool = true,
+            onLockedToneTap: (@MainActor @Sendable () -> Void)? = nil
+        ) {
+            self.isSkinTonePickerEnabled = isSkinTonePickerEnabled
+            self.onLockedToneTap = onLockedToneTap
+        }
+
+        public static let `default` = Configuration()
+    }
+
+    // MARK: - Properties
+
     @Binding var selection: String?
     @Bindable var store: EmojiPickerStore
+    let configuration: Configuration
 
     @Environment(\.dismiss) private var dismiss
     @FocusState private var isSearchFocused: Bool
@@ -27,9 +48,13 @@ public struct EmojiPickerView: View {
     @State private var scrollProxy: ScrollViewProxy?
     private let scrollCoordinateSpace = "emoji-picker-scroll"
 
-    public init(selection: Binding<String?>, store: EmojiPickerStore) {
+    public init(selection: Binding<String?>, store: EmojiPickerStore, configuration: Configuration = .default) {
         self._selection = selection
         self.store = store
+        self.configuration = configuration
+        if !configuration.isSkinTonePickerEnabled {
+            _selectedTone = State(initialValue: .default)
+        }
     }
 
     private var trimmedSearch: String {
@@ -88,7 +113,11 @@ public struct EmojiPickerView: View {
         HStack(spacing: DesignTokens.Spacing.lg) {
             searchPill
                 .frame(maxWidth: .infinity)
-            TonePickerButton(selectedTone: $selectedTone)
+            TonePickerButton(
+                selectedTone: $selectedTone,
+                isEnabled: configuration.isSkinTonePickerEnabled,
+                onLockedTap: configuration.onLockedToneTap
+            )
         }
     }
 
@@ -348,13 +377,15 @@ public struct EmojiPickerView: View {
 
 private struct TonePickerButton: View {
     @Binding var selectedTone: EmojiSkinTone
+    let isEnabled: Bool
+    let onLockedTap: (@MainActor @Sendable () -> Void)?
     @State private var showPicker = false
 
     var body: some View {
         Button {
             showPicker.toggle()
         } label: {
-            if let img = EmojiResolver.resolvedImage(for: .emojiClap, tone: selectedTone) {
+            if let img = EmojiResolver.resolvedImage(for: .emojiClap, tone: isEnabled ? selectedTone : .default) {
                 Image(uiImage: img)
                     .resizable()
                     .scaledToFit()
@@ -362,7 +393,14 @@ private struct TonePickerButton: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text("Skin tone options"))
+        .accessibilityLabel(Text(isEnabled ? "Skin tone options" : "Skin tones locked"))
+        .overlay(alignment: .bottomTrailing) {
+            if !isEnabled {
+                DiscourseIconView(icon: .lock, size: 12, color: .primary)
+                    .padding(2)
+                    .background(.ultraThinMaterial, in: Circle())
+            }
+        }
         .popover(isPresented: $showPicker, arrowEdge: .top) {
             toneSwatches
                 .presentationCompactAdaptation(.popover)
@@ -372,10 +410,16 @@ private struct TonePickerButton: View {
     private var toneSwatches: some View {
         HStack(spacing: DesignTokens.Spacing.sm) {
             ForEach(EmojiSkinTone.allCases) { tone in
+                let isLocked = !isEnabled && tone != .default
                 Button {
-                    selectedTone = tone
-                    EmojiTonePreference.current = tone
-                    showPicker = false
+                    if isLocked {
+                        showPicker = false
+                        onLockedTap?()
+                    } else {
+                        selectedTone = tone
+                        EmojiTonePreference.current = tone
+                        showPicker = false
+                    }
                 } label: {
                     ZStack {
                         if let img = EmojiResolver.resolvedImage(for: .emojiClap, tone: tone) {
@@ -385,7 +429,12 @@ private struct TonePickerButton: View {
                                 .frame(width: DesignTokens.Picker.toneSwatchSize, height: DesignTokens.Picker.toneSwatchSize)
                         }
 
-                        if tone == selectedTone {
+                        if isLocked {
+                            Circle()
+                                .fill(.black.opacity(0.35))
+                                .frame(width: DesignTokens.Picker.toneSwatchSize, height: DesignTokens.Picker.toneSwatchSize)
+                            DiscourseIconView(icon: .lock, size: 12, color: .white)
+                        } else if tone == selectedTone {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 12, weight: .bold))
                                 .foregroundStyle(tone == .default || tone == .light ? .black : .white)
@@ -393,7 +442,7 @@ private struct TonePickerButton: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Text(tone.accessibilityLabel))
+                .accessibilityLabel(Text(isLocked ? "\(tone.accessibilityLabel), locked" : tone.accessibilityLabel))
             }
         }
         .padding(.horizontal, DesignTokens.Spacing.lg)
