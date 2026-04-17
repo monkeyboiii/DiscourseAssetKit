@@ -9,6 +9,7 @@ import DiscourseAssetKit
 struct ContentView: View {
     @State private var selection: String?
     @State private var showPicker = false
+    @State private var showIcons = false
     @State private var showProfiler = false
     @State private var store = EmojiPickerStore()
 
@@ -37,6 +38,11 @@ struct ContentView: View {
                 }
                 .buttonStyle(.borderedProminent)
 
+                Button("Open Icon Catalog") {
+                    showIcons = true
+                }
+                .buttonStyle(.bordered)
+
                 Button {
                     showProfiler.toggle()
                 } label: {
@@ -50,6 +56,22 @@ struct ContentView: View {
         .sheet(isPresented: $showPicker) {
             ZStack(alignment: .bottom) {
                 EmojiPickerView(selection: $selection, store: store)
+
+                if showProfiler {
+                    ProfilerView()
+                        .padding(.horizontal)
+                        .padding(.bottom, 8)
+                        .allowsHitTesting(false)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.easeInOut(duration: 0.25), value: showProfiler)
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showIcons) {
+            ZStack(alignment: .bottom) {
+                IconCatalogSheet()
 
                 if showProfiler {
                     ProfilerView()
