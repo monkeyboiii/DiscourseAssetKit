@@ -12,15 +12,50 @@ public struct EmojiPickerView: View {
     // MARK: - Configuration
 
     public struct Configuration: Sendable {
-        public var isSkinTonePickerEnabled: Bool
-        public var onLockedToneTap: (@MainActor @Sendable () -> Void)?
+        /// Number of `EmojiSkinTone.allCases` entries unlocked for the user,
+        /// counted from index 0. Tones at index >= `tonesUnlocked` render as
+        /// locked swatches and route taps to `onLockedToneTap`.
+        public var tonesUnlocked: Int
+
+        /// Tint colors for *locked* tones, parallel to indices
+        /// `tonesUnlocked..<EmojiSkinTone.allCases.count`. `lockedToneTints[0]`
+        /// tints the first locked tone, etc.
+        public var lockedToneTints: [Color]
+
+        /// Called when a locked tone swatch is tapped. The Int is the 0-based
+        /// locked-tone index — `0` is the first tone above `tonesUnlocked`.
+        public var onLockedToneTap: (@MainActor @Sendable (Int) -> Void)?
+
+        /// Per-group ordered cap arrays oriented from the *current tier upward*.
+        /// Index 0 = items unlocked at the user's current tier.
+        /// Index 1 = additionally unlocked one tier up.
+        /// `nil` at any position means unlimited from that band onward.
+        /// Group IDs absent from the dictionary are fully unlocked.
+        public var groupBands: [String: [Int?]]
+
+        /// Tint colors for *locked* bands, parallel to `groupBands` array
+        /// positions starting at index 1. `bandTints[0]` tints items in the
+        /// first locked band (i.e., items requiring +1 tier upgrade).
+        public var bandTints: [Color]
+
+        /// Called when a locked emoji is tapped. The Int is the 0-based locked
+        /// band index — 0 means the first locked band (current tier + 1), etc.
+        public var onLockedEmojiTap: (@MainActor @Sendable (Int) -> Void)?
 
         public init(
-            isSkinTonePickerEnabled: Bool = true,
-            onLockedToneTap: (@MainActor @Sendable () -> Void)? = nil
+            tonesUnlocked: Int = EmojiSkinTone.allCases.count,
+            lockedToneTints: [Color] = [],
+            onLockedToneTap: (@MainActor @Sendable (Int) -> Void)? = nil,
+            groupBands: [String: [Int?]] = [:],
+            bandTints: [Color] = [],
+            onLockedEmojiTap: (@MainActor @Sendable (Int) -> Void)? = nil
         ) {
-            self.isSkinTonePickerEnabled = isSkinTonePickerEnabled
+            self.tonesUnlocked = tonesUnlocked
+            self.lockedToneTints = lockedToneTints
             self.onLockedToneTap = onLockedToneTap
+            self.groupBands = groupBands
+            self.bandTints = bandTints
+            self.onLockedEmojiTap = onLockedEmojiTap
         }
 
         public static let `default` = Configuration()
@@ -52,8 +87,13 @@ public struct EmojiPickerView: View {
         self._selection = selection
         self.store = store
         self.configuration = configuration
-        if !configuration.isSkinTonePickerEnabled {
-            _selectedTone = State(initialValue: .default)
+        // Clamp the persisted tone preference to the user's unlocked range so a
+        // post-downgrade picker doesn't display a tone the user can't use.
+        let initialTone = EmojiTonePreference.current
+        let toneIdx = EmojiSkinTone.allCases.firstIndex(of: initialTone) ?? 0
+        if toneIdx >= configuration.tonesUnlocked {
+            let clampedIdx = max(configuration.tonesUnlocked - 1, 0)
+            _selectedTone = State(initialValue: EmojiSkinTone.allCases[clampedIdx])
         }
     }
 
@@ -115,7 +155,8 @@ public struct EmojiPickerView: View {
                 .frame(maxWidth: .infinity)
             TonePickerButton(
                 selectedTone: $selectedTone,
-                isEnabled: configuration.isSkinTonePickerEnabled,
+                tonesUnlocked: configuration.tonesUnlocked,
+                lockedToneTints: configuration.lockedToneTints,
                 onLockedTap: configuration.onLockedToneTap
             )
         }
@@ -267,10 +308,21 @@ public struct EmojiPickerView: View {
 
     private func emojiGrid(items: [EmojiItem]) -> some View {
         let columns = [GridItem(.adaptive(minimum: DesignTokens.Picker.minCellSize), spacing: DesignTokens.Spacing.md)]
+        let lockedBands = lockedBandByItemId
+        let tints = configuration.bandTints
         return LazyVGrid(columns: columns, spacing: DesignTokens.Spacing.md) {
             ForEach(items) { item in
+                let lockBand = lockedBands[item.id]
+                let lockTint: Color? = {
+                    guard let lockBand else { return nil }
+                    return tints.indices.contains(lockBand) ? tints[lockBand] : nil
+                }()
                 Button {
                     guard Date().timeIntervalSince(lastPreviewDismissTime) > 0.3 else { return }
+                    if let lockBand {
+                        configuration.onLockedEmojiTap?(lockBand)
+                        return
+                    }
                     var name = item.baseName
                     if item.tonable && selectedTone != .default {
                         name += selectedTone.suffix
@@ -283,11 +335,26 @@ public struct EmojiPickerView: View {
                     EmojiAsyncCell(item: item, size: DesignTokens.Picker.emojiSize, tone: selectedTone)
                         .frame(width: DesignTokens.Picker.minCellSize, height: DesignTokens.Picker.minCellSize)
                         .contentShape(Rectangle())
+                        .opacity(lockBand != nil ? 0.35 : 1.0)
+                        .overlay(alignment: .bottomTrailing) {
+                            if lockBand != nil {
+                                DiscourseIconView(icon: .lock, size: 10, color: .white)
+                                    .padding(3)
+                                    .background(
+                                        Circle().fill((lockTint ?? .gray).opacity(0.95))
+                                    )
+                                    .overlay(
+                                        Circle().strokeBorder(.white.opacity(0.6), lineWidth: 0.5)
+                                    )
+                            }
+                        }
                 }
                 .buttonStyle(EmojiCellButtonStyle())
-                .accessibilityLabel(Text(Self.prettyName(item.baseName)))
+                .accessibilityLabel(Text(lockBand != nil
+                    ? "\(Self.prettyName(item.baseName)), locked"
+                    : Self.prettyName(item.baseName)))
                 .accessibilityAddTraits(.isImage)
-                .accessibilityHint(Text("Double tap to select"))
+                .accessibilityHint(Text(lockBand != nil ? "Double tap to upgrade" : "Double tap to select"))
                 .onLongPressGesture(
                     minimumDuration: 0.9,
                     maximumDistance: 40,
@@ -322,6 +389,40 @@ public struct EmojiPickerView: View {
 
     private var recentItems: [EmojiItem] {
         recentIds.compactMap { store.itemsById[$0] }
+    }
+
+    /// Maps an item ID → 0-based locked band index. Items absent from the map
+    /// are unlocked. Band index k corresponds to `configuration.bandTints[k]`.
+    private var lockedBandByItemId: [String: Int] {
+        guard !configuration.groupBands.isEmpty else { return [:] }
+        var locked: [String: Int] = [:]
+        for group in store.groups {
+            guard let bands = configuration.groupBands[group.id],
+                  let items = store.itemsByGroup[group.id] else { continue }
+            for (i, item) in items.enumerated() {
+                guard let bandIdx = Self.lockedBandIndex(for: i, in: bands) else { continue }
+                locked[item.id] = bandIdx
+            }
+        }
+        return locked
+    }
+
+    /// Returns the locked-band index (0-based) for an item at position `index`
+    /// in a group whose band caps are `bands`. Returns `nil` if unlocked.
+    private static func lockedBandIndex(for index: Int, in bands: [Int?]) -> Int? {
+        guard !bands.isEmpty, let currentCap = bands[0], index >= currentCap else {
+            return nil
+        }
+        // Locked. Find the smallest k >= 1 where the item fits.
+        for k in 1..<bands.count {
+            if let cap = bands[k] {
+                if index < cap { return k - 1 }
+            } else {
+                return k - 1   // nil = unlimited from this band onward
+            }
+        }
+        // Past every cap and no nil terminator — clamp to last band.
+        return max(bands.count - 2, 0)
     }
 
     private func reloadRecents() {
@@ -377,15 +478,20 @@ public struct EmojiPickerView: View {
 
 private struct TonePickerButton: View {
     @Binding var selectedTone: EmojiSkinTone
-    let isEnabled: Bool
-    let onLockedTap: (@MainActor @Sendable () -> Void)?
+    let tonesUnlocked: Int
+    let lockedToneTints: [Color]
+    let onLockedTap: (@MainActor @Sendable (Int) -> Void)?
     @State private var showPicker = false
+
+    private var anyLocked: Bool {
+        tonesUnlocked < EmojiSkinTone.allCases.count
+    }
 
     var body: some View {
         Button {
             showPicker.toggle()
         } label: {
-            if let img = EmojiResolver.resolvedImage(for: .emojiClap, tone: isEnabled ? selectedTone : .default) {
+            if let img = EmojiResolver.resolvedImage(for: .emojiClap, tone: selectedTone) {
                 Image(uiImage: img)
                     .resizable()
                     .scaledToFit()
@@ -393,9 +499,9 @@ private struct TonePickerButton: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text(isEnabled ? "Skin tone options" : "Skin tones locked"))
+        .accessibilityLabel(Text(anyLocked ? "Skin tone options, some locked" : "Skin tone options"))
         .overlay(alignment: .bottomTrailing) {
-            if !isEnabled {
+            if anyLocked {
                 DiscourseIconView(icon: .lock, size: 12, color: .primary)
                     .padding(2)
                     .background(.ultraThinMaterial, in: Circle())
@@ -409,12 +515,16 @@ private struct TonePickerButton: View {
 
     private var toneSwatches: some View {
         HStack(spacing: DesignTokens.Spacing.sm) {
-            ForEach(EmojiSkinTone.allCases) { tone in
-                let isLocked = !isEnabled && tone != .default
+            ForEach(Array(EmojiSkinTone.allCases.enumerated()), id: \.element) { idx, tone in
+                let lockBand: Int? = idx >= tonesUnlocked ? idx - tonesUnlocked : nil
+                let lockTint: Color? = {
+                    guard let lockBand else { return nil }
+                    return lockedToneTints.indices.contains(lockBand) ? lockedToneTints[lockBand] : nil
+                }()
                 Button {
-                    if isLocked {
+                    if let lockBand {
                         showPicker = false
-                        onLockedTap?()
+                        onLockedTap?(lockBand)
                     } else {
                         selectedTone = tone
                         EmojiTonePreference.current = tone
@@ -427,11 +537,12 @@ private struct TonePickerButton: View {
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: DesignTokens.Picker.toneSwatchSize, height: DesignTokens.Picker.toneSwatchSize)
+                                .opacity(lockBand != nil ? 0.35 : 1.0)
                         }
 
-                        if isLocked {
+                        if lockBand != nil {
                             Circle()
-                                .fill(.black.opacity(0.35))
+                                .fill((lockTint ?? .gray).opacity(0.65))
                                 .frame(width: DesignTokens.Picker.toneSwatchSize, height: DesignTokens.Picker.toneSwatchSize)
                             DiscourseIconView(icon: .lock, size: 12, color: .white)
                         } else if tone == selectedTone {
@@ -442,7 +553,7 @@ private struct TonePickerButton: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Text(isLocked ? "\(tone.accessibilityLabel), locked" : tone.accessibilityLabel))
+                .accessibilityLabel(Text(lockBand != nil ? "\(tone.accessibilityLabel), locked" : tone.accessibilityLabel))
             }
         }
         .padding(.horizontal, DesignTokens.Spacing.lg)
