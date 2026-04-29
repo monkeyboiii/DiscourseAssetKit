@@ -17,6 +17,15 @@ public enum EmojiResolver {
         return EmojiAliasTable.aliases[stripped] ?? stripped
     }
 
+    /// Human-readable name for a shortcode, suitable as fallback display text.
+    /// Strips any tone suffix (`:t2`..`:t6`), canonicalizes aliases, then
+    /// replaces underscores with spaces. e.g. `"man_bowing:t2"` -> `"man bowing"`.
+    public static func displayName(for shortcode: String) -> String {
+        let stripped = shortcode.trimmingCharacters(in: CharacterSet(charactersIn: ":"))
+        let (baseName, _) = parseToneSuffix(stripped)
+        return canonicalize(baseName).replacingOccurrences(of: "_", with: " ")
+    }
+
     /// Full pipeline: shortcode -> canonical -> asset name -> DiscourseEmoji
     public static func resolve(_ shortcode: String) -> DiscourseEmoji? {
         let canonical = canonicalize(shortcode)

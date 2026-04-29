@@ -499,10 +499,10 @@ private struct TonePickerButton: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text(anyLocked ? "Skin tone options, some locked" : "Skin tone options"))
+        .accessibilityLabel(Text(anyLocked ? "Skin tone options, more to unlock" : "Skin tone options"))
         .overlay(alignment: .bottomTrailing) {
             if anyLocked {
-                DiscourseIconView(icon: .lock, size: 12, color: .primary)
+                DiscourseIconView(icon: .unlockKeyhole, size: 12, color: .primary)
                     .padding(2)
                     .background(.ultraThinMaterial, in: Circle())
             }
