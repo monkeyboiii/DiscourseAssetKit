@@ -26,3 +26,9 @@ public struct EmojiItem: Identifiable, Hashable, Sendable {
         self.searchBlob = searchBlob
     }
 }
+
+extension EmojiItem {
+    public static var catalogItems: [EmojiItem] {
+        EmojiItemTable.entries.values.flatMap { $0 }
+    }
+}

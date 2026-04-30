@@ -21,4 +21,8 @@ extension EmojiGroup {
         displayName: "Recents",
         discourseIcon: .emojiStar
     )
+
+    public static var catalogGroups: [EmojiGroup] {
+        EmojiItemTable.groups
+    }
 }
