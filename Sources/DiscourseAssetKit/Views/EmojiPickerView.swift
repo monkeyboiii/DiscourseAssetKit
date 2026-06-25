@@ -83,10 +83,14 @@ public struct EmojiPickerView: View {
     @State private var scrollProxy: ScrollViewProxy?
     private let scrollCoordinateSpace = "emoji-picker-scroll"
 
-    public init(selection: Binding<String?>, store: EmojiPickerStore, configuration: Configuration = .default) {
+    public init(selection: Binding<String?>, store: EmojiPickerStore, configuration: Configuration = .default, initialSearch: String = "") {
         self._selection = selection
         self.store = store
         self.configuration = configuration
+        // Seed the search field so a caller can open the picker pre-filtered to a
+        // term (e.g. an in-progress `:shortcode` the user was typing). Empty by
+        // default, so the picker opens on the grouped/recents view as before.
+        _searchText = State(initialValue: initialSearch)
         // Clamp the persisted tone preference to the user's unlocked range so a
         // post-downgrade picker doesn't display a tone the user can't use.
         let initialTone = EmojiTonePreference.current
