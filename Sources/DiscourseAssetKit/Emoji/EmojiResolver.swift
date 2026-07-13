@@ -100,6 +100,17 @@ public enum EmojiResolver {
             ?? EmojiImageCache.image(named: emoji.rawValue)
     }
 
+    /// `resolvedImage(for:tone:)` through the resized-bitmap cache: same tone → base
+    /// fallback, keyed by the asset that actually loaded.
+    static func resolvedResizedImage(for emoji: DiscourseEmoji, tone: EmojiSkinTone, size: CGFloat) -> UIImage? {
+        guard tone != .default else {
+            return EmojiImageCache.resizedImage(named: emoji.rawValue, size: size)
+        }
+        let toneAssetName = "\(emoji.rawValue)_t\(tone.rawValue)"
+        return EmojiImageCache.resizedImage(named: toneAssetName, size: size)
+            ?? EmojiImageCache.resizedImage(named: emoji.rawValue, size: size)
+    }
+
     /// Check if a given canonical shortcode supports skin tones.
     public static func isTonable(_ shortcode: String) -> Bool {
         let canonical = canonicalize(shortcode)

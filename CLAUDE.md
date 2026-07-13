@@ -231,7 +231,13 @@ bash icon.sh
 
 Emoji PNGs are bundled as flat files via `.copy("Resources/Emojis")` — **no `actool` compilation**. This avoids the memory explosion that xcassets caused with 3,400+ imagesets.
 
-All emoji image loading goes through `EmojiImageCache`, which uses `Bundle.module.url(forResource:withExtension:subdirectory:"Emojis")` + `NSCache`:
+All emoji image loading goes through `EmojiImageCache`, which uses `Bundle.module.url(forResource:withExtension:subdirectory:"Emojis")` + `NSCache`.
+
+Two bounded cache tiers (see `DAK_EMOJITEXT_PERF_PLAN.md` at the umbrella root for the F23/F48 rationale):
+- **Decoded source PNGs** — `totalCostLimit` 64 MB, cost = pixel bytes.
+- **Resized bitmaps** (internal, `resizedImage(named:size:)`) — `countLimit` 512 / 16 MB; one `UIGraphicsImageRenderer` pass per unique (asset, size). `EmojiText` renders through this tier via `EmojiResolver.resolvedResizedImage(for:tone:size:)`.
+
+`EmojiText` additionally memoizes the built `Text` + VoiceOver string per (rawText, emojiSize) in a `@MainActor` 256-entry NSCache, with a no-emoji fast path (no ":", no Unicode Emoji-property scalar, no scalar from the table-derived exception set — ♡/☻ lack the Emoji property) that skips the pipeline entirely.
 
 ```swift
 // Centralized loader (EmojiImageCache.swift)

@@ -3,6 +3,7 @@
 //  DiscourseAssetKit
 //
 //  Renders text with inline Discourse emoji images for :shortcode: patterns.
+//  Per-pass cost is memoized; see DAK_EMOJITEXT_PERF_PLAN.md (umbrella root).
 //
 
 import SwiftUI
@@ -17,8 +18,64 @@ public struct EmojiText: View {
     }
 
     public var body: some View {
-        buildText()
-            .accessibilityLabel(Text(accessibleDescription))
+        let render = cachedRender()
+        render.text
+            .accessibilityLabel(Text(render.accessibleText))
+    }
+
+    // MARK: - Render memoization
+
+    /// Built `Text` + VoiceOver string for one (rawText, emojiSize); boxed for NSCache.
+    private final class CachedRender {
+        let text: Text
+        let accessibleText: String
+        init(text: Text, accessibleText: String) {
+            self.text = text
+            self.accessibleText = accessibleText
+        }
+    }
+
+    @MainActor private static let renderCache: NSCache<NSString, CachedRender> = {
+        let cache = NSCache<NSString, CachedRender>()
+        cache.countLimit = 256
+        return cache
+    }()
+
+    @MainActor
+    private func cachedRender() -> CachedRender {
+        if Self.isPlainText(rawText) {
+            return CachedRender(text: Text(rawText), accessibleText: rawText)
+        }
+        // The size suffix is a single CGFloat description (no "|"), so keys parse
+        // unambiguously from the right — no rawText collision is possible.
+        let key = "\(rawText)|\(emojiSize)" as NSString
+        if let cached = Self.renderCache.object(forKey: key) {
+            return cached
+        }
+        let render = CachedRender(text: buildText(), accessibleText: accessibleDescription)
+        Self.renderCache.setObject(render, forKey: key)
+        return render
+    }
+
+    /// Scalars of replacement-table keys that lack the Unicode Emoji property
+    /// (currently ♡ U+2661, ☻ U+263B) — the fast path must not skip them.
+    /// Derived from the table so regeneration can't silently break the fast path.
+    private static let nonEmojiPropertyKeyScalars: Set<Unicode.Scalar> = {
+        var scalars = Set<Unicode.Scalar>()
+        for key in EmojiReplacementTable.unicodeToShortcode.keys
+        where !key.unicodeScalars.contains(where: { $0.properties.isEmoji }) {
+            scalars.formUnion(key.unicodeScalars)
+        }
+        return scalars
+    }()
+
+    /// True when the pipeline cannot change the string: no ":" (shortcodes) and no
+    /// scalar that any `EmojiReplacementTable.unicodeToShortcode` key contains
+    /// (Emoji property + the exception set above; exhaustively asserted in tests).
+    static func isPlainText(_ text: String) -> Bool {
+        !text.contains(":") && !text.unicodeScalars.contains { scalar in
+            scalar.properties.isEmoji || nonEmojiPropertyKeyScalars.contains(scalar)
+        }
     }
 
     private func buildText() -> Text {
@@ -38,7 +95,7 @@ public struct EmojiText: View {
     }
 
     /// Builds a VoiceOver-friendly string: shortcodes and Unicode emoji become readable names.
-    private var accessibleDescription: String {
+    var accessibleDescription: String {
         // Replace :shortcode: with readable name
         let pattern = /:([a-zA-Z0-9_+-]+(?::t[2-6])?):/
         var text = rawText
@@ -82,8 +139,7 @@ public struct EmojiText: View {
 
             let fullShortcode = String(match.output.1) // e.g. "+1:t3" or "wave"
             if let resolved = EmojiResolver.resolveWithTone(fullShortcode),
-               let uiImage = EmojiResolver.resolvedImage(for: resolved.emoji, tone: resolved.tone) {
-                let scaled = uiImage.resized(to: CGSize(width: emojiSize, height: emojiSize))
+               let scaled = EmojiResolver.resolvedResizedImage(for: resolved.emoji, tone: resolved.tone, size: emojiSize) {
                 segments.append(.image(scaled))
             } else {
                 segments.append(.text(":\(fullShortcode):"))
@@ -108,13 +164,12 @@ public struct EmojiText: View {
         for char in input {
             let str = String(char)
             if let resolved = EmojiResolver.resolveUnicodeWithTone(str),
-               let uiImage = EmojiResolver.resolvedImage(for: resolved.emoji, tone: resolved.tone) {
+               let scaled = EmojiResolver.resolvedResizedImage(for: resolved.emoji, tone: resolved.tone, size: emojiSize) {
                 // Flush pending plain text
                 if !pending.isEmpty {
                     result = result + Text(pending)
                     pending = ""
                 }
-                let scaled = uiImage.resized(to: CGSize(width: emojiSize, height: emojiSize))
                 result = result + Text(Image(uiImage: scaled))
             } else {
                 pending.append(char)
@@ -126,16 +181,6 @@ public struct EmojiText: View {
         }
 
         return result
-    }
-}
-
-// MARK: - UIImage Scaling
-
-private extension UIImage {
-    func resized(to size: CGSize) -> UIImage {
-        UIGraphicsImageRenderer(size: size).image { _ in
-            draw(in: CGRect(origin: .zero, size: size))
-        }
     }
 }
 
