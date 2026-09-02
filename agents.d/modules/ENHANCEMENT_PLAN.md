@@ -1,3 +1,9 @@
+---
+kind: spec
+status: in-progress
+summary: Enhancement plan from the 2026-03-23 architecture review; image cache, accessibility and six housekeeping items shipped (struck through), size-aware resize cache and the core test suite open.
+---
+
 # DiscourseAssetKit — Enhancement Plans
 
 > Architecture review conducted 2026-03-23. Updated 2026-03-25 (flat PNG migration, image cache, accessibility).

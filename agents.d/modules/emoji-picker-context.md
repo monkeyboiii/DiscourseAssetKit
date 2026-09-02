@@ -1,3 +1,9 @@
+---
+kind: note
+status: current
+summary: Context brief for EmojiPickerView work: dependency graph, key types API, current picker architecture, concurrency model, known constraints, build & preview.
+---
+
 # EmojiPickerView Enhancement — Context for Swift Expert
 
 **Target file:** `Sources/DiscourseAssetKit/Views/EmojiPickerView.swift`
