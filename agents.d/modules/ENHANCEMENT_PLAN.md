@@ -1,5 +1,5 @@
 ---
-kind: spec
+kind: note
 status: in-progress
 summary: Enhancement plan from the 2026-03-23 architecture review; image cache, accessibility and six housekeeping items shipped (struck through), size-aware resize cache and the core test suite open.
 ---
