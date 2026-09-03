@@ -4,7 +4,7 @@ The repo contract. Everything else an agent needs is under `agents.d/` — shape
 harness's `playbook/agents-d.md`.
 
 - Read `agents.d/memory/MEMORY.md` first: two facts, one of which changes how images are loaded.
-- The why-doc is `agents.d/modules/DISCOURSE_ASSET_KIT_MODULE.md`; the open work is
+- The why-doc is `agents.d/modules/discourse-asset-kit.md`; the open work is
   `agents.d/modules/ENHANCEMENT_PLAN.md`.
 - This package **cannot be built on the Linux dev box** (no Xcode). Swift changes are
   compile-by-inspection; the operator builds on a Mac.
