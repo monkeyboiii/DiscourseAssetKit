@@ -5,7 +5,7 @@ harness's `playbook/agents-d.md`.
 
 - Read `agents.d/memory/MEMORY.md` first: two facts, one of which changes how images are loaded.
 - The why-doc is `agents.d/modules/discourse-asset-kit.md`; the open work is
-  `agents.d/modules/ENHANCEMENT_PLAN.md`.
+  `agents.d/modules/enhancement-plan.md`.
 - This package **cannot be built on the Linux dev box** (no Xcode). Swift changes are
   compile-by-inspection; the operator builds on a Mac.
 - The iOS app consumes this package **from GitHub via `Package.resolved`**, not by local path:
